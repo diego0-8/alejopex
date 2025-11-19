@@ -1,0 +1,601 @@
+/* ===== VARIABLES CSS ===== */
+:root {
+    --primary-color: #2563eb;
+    --primary-hover: #1d4ed8;
+    --secondary-color: #3b82f6;
+    --text-white: #ffffff;
+    --text-gray: #cbd5e1;
+    --text-muted: #94a3b8;
+    --bg-dark: rgba(30, 41, 59, 0.95);
+    --bg-input: rgba(51, 65, 85, 0.8);
+    --border-color: rgba(71, 85, 105, 0.3);
+    --success-color: #059669;
+    --danger-color: #dc2626;
+    --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    --transition: all 0.3s ease;
+}
+
+/* ===== ESTILOS BASE ===== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    
+    /* Imagen de fondo adaptativa */
+    background-image: url(../images/Frame16.png);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    
+    /* Gradiente superpuesto para mejor legibilidad */
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.7), rgba(30, 41, 59, 0.8)), 
+                url(../images/Frame16.png);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+}
+
+/* ===== CONTENEDOR PRINCIPAL DE DOS COLUMNAS ===== */
+.login-wrapper {
+    display: flex;
+    width: 90%;
+    max-width: 1000px;
+    min-height: 600px;
+    background: var(--bg-dark);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border-color);
+    border-radius: 1.5rem;
+    box-shadow: var(--shadow), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+    animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ===== COLUMNA IZQUIERDA - IMAGEN Y DESCRIPCIÓN ===== */
+.login-info {
+    flex: 1;
+    background: url(../images/Frame17.png);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 3rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Gradiente superpuesto para mejor legibilidad del contenido */
+.login-info::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.8), rgba(59, 130, 246, 0.6));
+    z-index: 1;
+}
+
+.login-info-content {
+    position: relative;
+    z-index: 2;
+    color: var(--text-white);
+}
+
+.login-info img {
+    width: 120px;
+    height: 120px;
+    margin-bottom: 2rem;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.login-info h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.login-info h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    opacity: 0.9;
+}
+
+.login-info p {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    opacity: 0.8;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.login-info .features {
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.login-info .feature {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+    opacity: 0.9;
+}
+
+.login-info .feature i {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 1rem;
+}
+
+/* ===== COLUMNA DERECHA - FORMULARIO DE LOGIN ===== */
+.login-container {
+    flex: 1;
+    padding: 3rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: rgba(30, 41, 59, 0.95);
+}
+
+/* ===== HEADER Y TÍTULO ===== */
+.login-header {
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+.login-header i {
+    display: block;
+    margin: 0 auto 1rem;
+    font-size: 3rem;
+    color: var(--secondary-color);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.login-container h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: var(--text-white);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    position: relative;
+}
+
+.login-container h2::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    border-radius: 2px;
+}
+
+/* ===== FORMULARIO ===== */
+.login-form {
+    margin-bottom: 1rem;
+}
+
+.input-group {
+    margin-bottom: 1.8rem;
+    text-align: left;
+    position: relative;
+}
+
+.input-group label {
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-gray);
+    margin-bottom: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.input-group label i {
+    margin-right: 0.5rem;
+    color: var(--secondary-color);
+    font-size: 0.8rem;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 1rem 1.2rem;
+    border-radius: 0.75rem;
+    border: 2px solid rgba(71, 85, 105, 0.5);
+    background: var(--bg-input);
+    color: var(--text-white);
+    font-size: 1rem;
+    font-weight: 500;
+    transition: var(--transition);
+    box-sizing: border-box;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background: rgba(51, 65, 85, 0.9);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    transform: translateY(-2px);
+}
+
+.input-group input::placeholder {
+    color: #64748b;
+    font-weight: 400;
+}
+
+/* ===== BOTÓN DE LOGIN ===== */
+.login-button {
+    width: 100%;
+    padding: 1rem;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: var(--text-white);
+    border: none;
+    border-radius: 0.75rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: relative;
+    overflow: hidden;
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.login-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+}
+
+.login-button:hover {
+    background: linear-gradient(135deg, var(--primary-hover), var(--primary-color));
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
+}
+
+.login-button:hover::before {
+    left: 100%;
+}
+
+.login-button:active {
+    transform: translateY(0);
+}
+
+.login-button i {
+    font-size: 1rem;
+}
+
+/* ===== ENLACE CONTRASEÑA OLVIDADA ===== */
+.forgot-password {
+    margin-top: 2rem;
+    text-align: center;
+}
+
+.forgot-password a {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: var(--transition);
+    font-weight: 500;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.forgot-password a::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 0;
+    height: 1px;
+    background: var(--secondary-color);
+    transition: width 0.3s ease;
+}
+
+.forgot-password a:hover {
+    color: var(--secondary-color);
+}
+
+.forgot-password a:hover::after {
+    width: 100%;
+}
+
+.forgot-password a i {
+    font-size: 0.8rem;
+}
+
+/* ===== FOOTER ===== */
+.login-footer {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.login-footer p {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 0;
+    color: var(--text-gray);
+    font-size: 0.9rem;
+}
+
+.login-footer i {
+    color: var(--success-color);
+}
+
+/* ===== ALERTAS ===== */
+.alert {
+    border-radius: 0.75rem;
+    border: none;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1.5rem;
+    text-align: left;
+    font-weight: 500;
+    position: relative;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}
+
+.alert-danger {
+    background: rgba(220, 38, 38, 0.9);
+    color: var(--text-white);
+    border-left: 4px solid var(--danger-color);
+}
+
+.alert-success {
+    background: rgba(5, 150, 105, 0.9);
+    color: var(--text-white);
+    border-left: 4px solid var(--success-color);
+}
+
+.alert i {
+    margin-right: 0.5rem;
+    font-size: 1.1rem;
+}
+
+/* ===== RESPONSIVE DESIGN - SOLO MÓVILES ===== */
+@media (max-width: 768px) {
+    body {
+        padding: 1rem;
+    }
+    
+    .login-wrapper {
+        flex-direction: column;
+        width: 100%;
+        max-width: 100%;
+        min-height: auto;
+        border-radius: 1rem;
+    }
+    
+    .login-info {
+        padding: 2rem;
+        order: 2;
+    }
+    
+    .login-info h1 {
+        font-size: 2rem;
+    }
+    
+    .login-info h2 {
+        font-size: 1.25rem;
+    }
+    
+    .login-info p {
+        font-size: 1rem;
+    }
+    
+    .login-info img {
+        width: 80px;
+        height: 80px;
+        margin-bottom: 1.5rem;
+    }
+    
+    .login-container {
+        padding: 2rem;
+        order: 1;
+    }
+    
+    .login-container h2 {
+        font-size: 1.75rem;
+    }
+    
+    .input-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .input-group input {
+        padding: 0.9rem 1rem;
+        font-size: 0.95rem;
+    }
+    
+    .login-button {
+        padding: 0.9rem;
+        font-size: 1rem;
+    }
+    
+    .forgot-password a {
+        font-size: 0.85rem;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 0.5rem;
+    }
+    
+    .login-wrapper {
+        border-radius: 0.75rem;
+    }
+    
+    .login-info {
+        padding: 1.5rem;
+    }
+    
+    .login-info h1 {
+        font-size: 1.75rem;
+    }
+    
+    .login-info h2 {
+        font-size: 1.1rem;
+    }
+    
+    .login-info img {
+        width: 60px;
+        height: 60px;
+        margin-bottom: 1rem;
+    }
+    
+    .login-container {
+        padding: 1.5rem;
+    }
+    
+    .login-container h2 {
+        font-size: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .login-header i {
+        font-size: 2.5rem;
+    }
+    
+    .input-group label {
+        font-size: 0.85rem;
+    }
+    
+    .input-group input {
+        padding: 0.8rem;
+        font-size: 0.9rem;
+    }
+    
+    .login-button {
+        padding: 0.8rem;
+        font-size: 0.95rem;
+    }
+    
+    .forgot-password {
+        margin-top: 1.5rem;
+    }
+    
+    .login-footer {
+        margin-top: 1.5rem;
+    }
+}
+
+/* ===== SOPORTE PARA PANTALLAS PEQUEÑAS EN LANDSCAPE ===== */
+@media (max-height: 600px) and (orientation: landscape) {
+    body {
+        padding: 0.5rem;
+    }
+    
+    .login-wrapper {
+        flex-direction: row;
+        min-height: auto;
+        max-height: 90vh;
+    }
+    
+    .login-info {
+        padding: 1.5rem;
+    }
+    
+    .login-info h1 {
+        font-size: 1.5rem;
+    }
+    
+    .login-info h2 {
+        font-size: 1rem;
+    }
+    
+    .login-info img {
+        width: 50px;
+        height: 50px;
+        margin-bottom: 1rem;
+    }
+    
+    .login-container {
+        padding: 1.5rem;
+        overflow-y: auto;
+    }
+    
+    .login-header {
+        margin-bottom: 1rem;
+    }
+    
+    .login-header i {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .login-container h2 {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .input-group {
+        margin-bottom: 1rem;
+    }
+    
+    .forgot-password {
+        margin-top: 1rem;
+    }
+    
+    .login-footer {
+        margin-top: 1rem;
+    }
+}
