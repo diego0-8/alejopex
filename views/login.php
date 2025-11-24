@@ -279,13 +279,7 @@
                         >
                     </div>
                     
-                    <div class="remember-forgot">
-                        <div class="remember-me">
-                            <input type="checkbox" id="remember">
-                            <label for="remember" style="margin-bottom: 0; cursor: pointer;">Recordarme</label>
-                        </div>
-                        <a href="#" class="forgot-password" onclick="alert('Funcionalidad próximamente'); return false;">¿Olvidó su contraseña?</a>
-                    </div>
+                    
                     
                     <button type="submit" class="btn-login">Iniciar Sesión</button>
                 </form>

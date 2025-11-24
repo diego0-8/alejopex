@@ -43,8 +43,8 @@ class Obligacion {
      */
     public function obtenerPorNumero($numero_obligacion) {
         try {
-            $query = "SELECT o.*, c.IDENTIFICACION as nit_cxc, c.`NOMBRE CONTRATANTE` as nombre_cliente, 
-                     c.`TEL 1` as tel, c.`EMAIL CONTRATANTE` as email 
+            $query = "SELECT o.*, c.cc as nit_cxc, c.nombre as nombre_cliente, 
+                     c.cel1 as tel 
                      FROM {$this->table_name} o
                      INNER JOIN clientes c ON o.cliente_id = c.id
                      WHERE o.numero_obligacion = ?";
@@ -62,8 +62,8 @@ class Obligacion {
      */
     public function obtenerPorId($id) {
         try {
-            $query = "SELECT o.*, c.IDENTIFICACION as nit_cxc, c.`NOMBRE CONTRATANTE` as nombre_cliente, 
-                     c.`TEL 1` as tel, c.`EMAIL CONTRATANTE` as email 
+            $query = "SELECT o.*, c.cc as nit_cxc, c.nombre as nombre_cliente, 
+                     c.cel1 as tel 
                      FROM {$this->table_name} o
                      INNER JOIN clientes c ON o.cliente_id = c.id
                      WHERE o.id = ?";
@@ -150,8 +150,8 @@ class Obligacion {
      */
     public function obtenerTodas($filtros = [], $limite = null, $offset = 0) {
         try {
-            $query = "SELECT o.*, c.IDENTIFICACION as nit_cxc, c.`NOMBRE CONTRATANTE` as nombre_cliente, 
-                     c.`TEL 1` as tel, c.`EMAIL CONTRATANTE` as email 
+            $query = "SELECT o.*, c.cc as nit_cxc, c.nombre as nombre_cliente, 
+                     c.cel1 as tel 
                      FROM {$this->table_name} o
                      INNER JOIN clientes c ON o.cliente_id = c.id";
             $params = [];

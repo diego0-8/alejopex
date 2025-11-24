@@ -10,7 +10,7 @@ if (file_exists(__DIR__ . '/config_optimizacion.php')) {
 }
 
 // Configuración de sesión única para este proyecto
-session_name('APEX_SID');
+session_name('APEX_copia_SID');
 session_start();
 
 // Configuración de zona horaria
@@ -25,7 +25,7 @@ define('APP_URL', 'http://localhost/apex');
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', '');
-define('DB_NAME', 'apex');
+define('DB_NAME', 'apex2');
 define('DB_CHARSET', 'utf8mb4');
 
 // Configuración de seguridad

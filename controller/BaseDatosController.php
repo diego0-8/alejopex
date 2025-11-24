@@ -72,9 +72,9 @@ class BaseDatosController {
             
             // Obtener estadísticas de bases (por fecha de creación)
             $query_bases = "SELECT 
-                            COUNT(DISTINCT DATE(`FECHA CREACION`)) as total_bases,
+                            COUNT(DISTINCT DATE(fecha_creacion)) as total_bases,
                             COUNT(*) as total_clientes,
-                            COUNT(CASE WHEN `ESTADO` = 'activo' THEN 1 END) as clientes_activos
+                            COUNT(CASE WHEN estado = 'activo' THEN 1 END) as clientes_activos
                           FROM clientes";
             
             $stmt = $conn->prepare($query_bases);
@@ -122,9 +122,9 @@ class BaseDatosController {
                         SUM(ct.`TOTAL CARTERA`) as cartera_total
                       FROM clientes c
                       LEFT JOIN contratos ct ON c.id = ct.`ID_CLIENTE`
-                      WHERE DATE(c.`FECHA CREACION`) = :fecha_carga
+                      WHERE DATE(c.fecha_creacion) = :fecha_carga
                       GROUP BY c.id
-                      ORDER BY c.`FECHA CREACION` DESC";
+                      ORDER BY c.fecha_creacion DESC";
             
             $stmt = $conn->prepare($query);
             $stmt->bindParam(':fecha_carga', $fecha_carga);

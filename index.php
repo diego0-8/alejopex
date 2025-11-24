@@ -1095,7 +1095,10 @@ switch ($action) {
                 'usuario' => $_POST['usuario'] ?? '',
                 'contrasena' => $_POST['contrasena'] ?? '',
                 'estado' => $_POST['estado'] ?? 'activo',
-                'rol' => $_POST['rol'] ?? ''
+                'rol' => $_POST['rol'] ?? '',
+                // WebRTC Softphone: Campos de extensión
+                'extension' => $_POST['extension'] ?? '',
+                'sip_password' => $_POST['sip_password'] ?? ''
             ];
             
             // Crear el usuario usando el controlador

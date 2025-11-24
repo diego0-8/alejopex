@@ -56,7 +56,7 @@ class AdminController {
         }
         
         try {
-            $stmt_clientes_nuevos = $conn->query("SELECT COUNT(*) as total FROM clientes WHERE `FECHA CREACION` >= DATE_SUB(NOW(), INTERVAL 30 DAY)");
+            $stmt_clientes_nuevos = $conn->query("SELECT COUNT(*) as total FROM clientes WHERE fecha_creacion >= DATE_SUB(NOW(), INTERVAL 30 DAY)");
             $clientes_nuevos = $stmt_clientes_nuevos->fetch(PDO::FETCH_ASSOC)['total'];
         } catch (Exception $e) {
             error_log("Error al obtener clientes nuevos: " . $e->getMessage());
@@ -187,10 +187,23 @@ class AdminController {
         $this->usuario_model->contrasena = $datos_usuario['contrasena'];
         $this->usuario_model->rol = $datos_usuario['rol'];
         $this->usuario_model->estado = $datos_usuario['estado'];
+        
+        // WebRTC Softphone: Asignar extensión y password SIP (solo si se proporcionan)
+        if (!empty($datos_usuario['extension'])) {
+            $this->usuario_model->extension = $datos_usuario['extension'];
+        }
+        if (!empty($datos_usuario['sip_password'])) {
+            $this->usuario_model->sip_password = $datos_usuario['sip_password'];
+        }
 
         // Crear el usuario
         if ($this->usuario_model->crear()) {
-            return ['success' => true, 'message' => 'Usuario creado exitosamente'];
+            $mensaje = 'Usuario creado exitosamente';
+            // Agregar mensaje si es asesor con extensión
+            if ($datos_usuario['rol'] === 'asesor' && !empty($datos_usuario['extension'])) {
+                $mensaje .= '. Extensión ' . $datos_usuario['extension'] . ' asignada';
+            }
+            return ['success' => true, 'message' => $mensaje];
         } else {
             return ['success' => false, 'message' => 'Error al crear el usuario'];
         }

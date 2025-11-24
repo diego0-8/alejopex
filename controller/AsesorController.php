@@ -788,10 +788,9 @@ class AsesorController {
                 'obligaciones' => $obligaciones,
                 'cliente' => [
                     'id' => $cliente['id'],
-                    'identificacion' => $cliente['IDENTIFICACION'],
-                    'nombre_cliente' => $cliente['NOMBRE CONTRATANTE'],
-                    'tel' => $cliente['TEL 1'],
-                    'email' => $cliente['EMAIL CONTRATANTE']
+                    'identificacion' => $cliente['IDENTIFICACION'] ?? 'N/A',
+                    'nombre_cliente' => $cliente['NOMBRE CONTRATANTE'] ?? 'N/A',
+                    'tel' => $cliente['TEL 1'] ?? ''
                 ]
             ];
             
@@ -882,12 +881,12 @@ class AsesorController {
             $params = [];
             $necesita_update = false;
             
-            // Email: solo actualizar si se proporciona
-            if (isset($datos['email']) && $datos['email'] !== null && $datos['email'] !== '') {
-                $updates[] = "`EMAIL CONTRATANTE` = ?";
-                $params[] = $datos['email'];
-                $necesita_update = true;
-            }
+            // Email: La columna email no existe en la tabla clientes, se ignora
+            // if (isset($datos['email']) && $datos['email'] !== null && $datos['email'] !== '') {
+            //     $updates[] = "`EMAIL CONTRATANTE` = ?";
+            //     $params[] = $datos['email'];
+            //     $necesita_update = true;
+            // }
             
             // Dirección: No existe en la tabla clientes, se ignora
             // La columna DIRECCION no existe en la tabla clientes
@@ -1284,12 +1283,10 @@ class AsesorController {
                         c.id as ID_CLIENTE,
                         c.cc as IDENTIFICACION,
                         c.nombre as `NOMBRE CONTRATANTE`,
-                        c.`TEL 1`,
-                        c.`TEL 2`,
-                        c.`TEL 3`,
-                        c.`TEL 4`,
-                        c.`EMAIL CONTRATANTE`,
-                        c.CIUDAD,
+                        c.cel1 as `TEL 1`,
+                        c.cel2 as `TEL 2`,
+                        c.cel3 as `TEL 3`,
+                        c.cel4 as `TEL 4`,
                         aa.id as tarea_id,
                         bc.nombre as base_nombre
                       FROM asignaciones_asesores aa

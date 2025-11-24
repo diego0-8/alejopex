@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="assets/css/admin-dashboard.css">
     <link rel="stylesheet" href="assets/css/coordinador-dashboard.css">
     <link rel="stylesheet" href="assets/css/asesor_gestionar.css">
+    <link rel="stylesheet" href="assets/css/webrtc-softphone.css">
 </head>
 <body data-user-id="<?php echo $_SESSION['usuario_id'] ?? ''; ?>">
 
@@ -706,6 +707,193 @@
         // Función global para ser llamada desde asesor-gestionar.js después de guardar
         window.mostrarBotonesDespuesGuardar = mostrarBotonesDespuesGuardar;
     </script>
+
+    <!-- WebRTC Softphone Integration -->
+    <script src="assets/js/sip.min.js"></script>
+    <script>
+    // Verificación mejorada de carga de SIP.js
+    (function verificarSIPjs() {
+        let intentos = 0;
+        const maxIntentos = 50;
+        
+        function verificar() {
+            intentos++;
+            
+            // Verificar si SIP.js está completamente cargado
+            if (typeof SIP !== 'undefined' && 
+                typeof SIP.UserAgent !== 'undefined' && 
+                typeof SIP.UserAgent.makeURI === 'function') {
+                
+                console.log('✅ SIP.js cargado correctamente (intentos: ' + intentos + ')');
+                console.log('✅ Versión:', SIP.version || 'Unknown');
+                window.sipjsLoaded = true;
+                
+                // Cargar el softphone ahora que SIP.js está listo
+                const scriptSoftphone = document.createElement('script');
+                scriptSoftphone.src = 'assets/js/webrtc-softphone.js';
+                scriptSoftphone.onload = function() {
+                    console.log('✅ webrtc-softphone.js cargado');
+                };
+                document.head.appendChild(scriptSoftphone);
+                
+                return;
+            }
+            
+            if (intentos < maxIntentos) {
+                if (intentos % 10 === 0) {
+                    console.log('⏳ Esperando SIP.js... (' + intentos + '/' + maxIntentos + ')');
+                }
+                setTimeout(verificar, 100);
+            } else {
+                console.error('❌ SIP.js no se cargó después de ' + (maxIntentos * 100) + 'ms');
+                console.error('Estado actual:', {
+                    'typeof SIP': typeof SIP,
+                    'SIP.UserAgent': typeof (typeof SIP !== 'undefined' ? SIP.UserAgent : undefined),
+                    'SIP.UserAgent.makeURI': typeof (typeof SIP !== 'undefined' && SIP.UserAgent ? SIP.UserAgent.makeURI : undefined)
+                });
+                
+                // Intentar cargar desde CDN como fallback
+                console.log('🔄 Intentando cargar desde CDN...');
+                const scriptCDN = document.createElement('script');
+                scriptCDN.src = 'https://unpkg.com/sip.js@0.21.2/dist/sip.min.js';
+                scriptCDN.onload = function() {
+                    console.log('✅ SIP.js cargado desde CDN');
+                    window.sipjsLoaded = true;
+                    
+                    // Cargar softphone después de CDN
+                    const scriptSoftphone = document.createElement('script');
+                    scriptSoftphone.src = 'assets/js/webrtc-softphone.js';
+                    document.head.appendChild(scriptSoftphone);
+                };
+                scriptCDN.onerror = function() {
+                    console.error('❌ Error cargando SIP.js desde CDN');
+                    alert('Error crítico: No se pudo cargar SIP.js. El softphone no funcionará.');
+                };
+                document.head.appendChild(scriptCDN);
+            }
+        }
+        
+        // Iniciar verificación después de un momento
+        setTimeout(verificar, 100);
+    })();
+    </script>
+    <?php
+    // Incluir configuración WebRTC
+    require_once 'config/asterisk.php';
+    $webrtc_config = getWebRTCConfig();
+
+    // Verificar si el usuario tiene extensión asignada
+    if (isset($_SESSION['usuario_extension']) && !empty($_SESSION['usuario_extension'])):
+    ?>
+    <script>
+    // Configuración del softphone
+    const webrtcConfig = {
+        wss_server: '<?php echo $webrtc_config['wss_server']; ?>',
+        sip_domain: '<?php echo $webrtc_config['sip_domain']; ?>',
+        extension: '<?php echo $_SESSION['usuario_extension'] ?? ''; ?>',
+        password: '<?php echo $_SESSION['usuario_sip_password'] ?? ''; ?>',
+        display_name: '<?php echo $_SESSION['usuario_nombre'] ?? 'Asesor'; ?>',
+        stun_server: '<?php echo $webrtc_config['stun_server']; ?>',
+        // Configuración de servidores ICE (STUN/TURN) - OPCIÓN 1
+        // CRÍTICO: Debe ser un array válido para que WebRTC funcione correctamente
+        iceServers: <?php 
+            $iceServers = $webrtc_config['iceServers'] ?? [];
+            // Asegurar que sea un array válido
+            if (!is_array($iceServers) || empty($iceServers)) {
+                // Fallback: servidores STUN públicos
+                $iceServers = [
+                    ['urls' => 'stun:stun.l.google.com:19302'],
+                    ['urls' => 'stun:stun1.l.google.com:19302']
+                ];
+            }
+            echo json_encode($iceServers, JSON_UNESCAPED_SLASHES);
+        ?>,
+        debug_mode: <?php echo $webrtc_config['debug_mode'] ? 'true' : 'false'; ?>
+    };
+
+    // Esperar a que TANTO SIP.js COMO webrtc-softphone.js estén cargados
+    function inicializarSoftphoneConVerificacion() {
+        let intentos = 0;
+        const maxIntentos = 100;
+        
+        const intervalo = setInterval(function() {
+            intentos++;
+            
+            // Verificar que TODO esté listo
+            const sipjsListo = typeof SIP !== 'undefined' && 
+                              typeof SIP.UserAgent !== 'undefined' && 
+                              typeof SIP.UserAgent.makeURI === 'function';
+            
+            const softphoneListo = typeof WebRTCSoftphone !== 'undefined';
+            
+            if (sipjsListo && softphoneListo) {
+                clearInterval(intervalo);
+                console.log('✅ Todos los componentes listos, inicializando softphone...');
+                
+                try {
+                    window.webrtcSoftphone = new WebRTCSoftphone(webrtcConfig);
+                    console.log('✅ Softphone WebRTC inicializado correctamente');
+                    console.log('📞 Extensión:', webrtcConfig.extension);
+                } catch (error) {
+                    console.error('❌ Error al inicializar softphone:', error);
+                    console.error('Stack:', error.stack);
+                    alert('Error al inicializar el softphone: ' + error.message);
+                }
+                
+            } else {
+                if (intentos % 10 === 0) {
+                    console.log(`⏳ Esperando componentes... (${intentos}/${maxIntentos})`);
+                    console.log('  SIP.js listo:', sipjsListo);
+                    console.log('  WebRTCSoftphone listo:', softphoneListo);
+                }
+                
+                if (intentos >= maxIntentos) {
+                    clearInterval(intervalo);
+                    console.error('❌ Timeout esperando componentes del softphone');
+                    alert('El softphone no se pudo inicializar. Por favor, recarga la página.');
+                }
+            }
+        }, 100);
+    }
+
+    // Iniciar cuando el DOM esté listo
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', inicializarSoftphoneConVerificacion);
+    } else {
+        inicializarSoftphoneConVerificacion();
+    }
+
+    // Función global para toggle
+    function toggleSoftphone() {
+        if (typeof window.webrtcSoftphone !== 'undefined' && 
+            window.webrtcSoftphone !== null) {
+            
+            if (typeof window.webrtcSoftphone.toggle === 'function') {
+                window.webrtcSoftphone.toggle();
+            } else if (typeof window.webrtcSoftphone.show === 'function') {
+                window.webrtcSoftphone.show();
+            }
+        } else {
+            alert('El softphone aún no está listo. Por favor, espera un momento.');
+        }
+    }
+    
+    // Función global para llamar desde click-to-call
+    function llamarDesdeWebRTC(numero) {
+        if (typeof window.webrtcSoftphone !== 'undefined' && 
+            window.webrtcSoftphone !== null && 
+            window.webrtcSoftphone.callNumber) {
+            window.webrtcSoftphone.callNumber(numero);
+        } else {
+            alert('Softphone no disponible. Por favor, espera a que se inicialice.');
+        }
+    }
+    </script>
+    <?php else: ?>
+    <script>
+    console.warn('⚠️ Usuario sin extensión WebRTC asignada');
+    </script>
+    <?php endif; ?>
 
 </body>
 </html>

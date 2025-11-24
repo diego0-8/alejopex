@@ -33,11 +33,16 @@ class AuthController {
             if ($usuario_data) {
                 // Guardar datos del usuario en la sesión
                 $_SESSION['usuario_id'] = $usuario_data['cedula'];
+                $_SESSION['usuario_cedula'] = $usuario_data['cedula'];
                 $_SESSION['usuario_nombre'] = $usuario_data['nombre_completo'];
                 $_SESSION['usuario_usuario'] = $usuario_data['usuario'];
                 $_SESSION['usuario_rol'] = $usuario_data['rol'];
                 $_SESSION['usuario_estado'] = $usuario_data['estado'];
                 $_SESSION['logged_in'] = true;
+                
+                // WebRTC Softphone: Cargar extensión y password SIP si existen
+                $_SESSION['usuario_extension'] = $usuario_data['extension'] ?? null;
+                $_SESSION['usuario_sip_password'] = $usuario_data['sip_password'] ?? null;
 
                 // Redirigir según el rol
                 $this->redirigirSegunRol($usuario_data['rol']);

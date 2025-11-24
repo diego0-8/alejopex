@@ -15,6 +15,8 @@ class Usuario {
     public $contrasena;
     public $estado;
     public $rol;
+    public $extension;          // WebRTC Softphone
+    public $sip_password;       // WebRTC Softphone
 
     public function __construct() {
         $this->conn = getDBConnection();
@@ -28,7 +30,7 @@ class Usuario {
      */
     public function autenticar($usuario, $contrasena) {
         try {
-            $query = "SELECT cedula, nombre_completo, usuario, contrasena, estado, rol 
+            $query = "SELECT cedula, nombre_completo, usuario, contrasena, estado, rol, extension, sip_password 
                       FROM " . $this->table_name . " 
                       WHERE usuario = :usuario AND estado = 'activo'";
 
@@ -41,7 +43,7 @@ class Usuario {
                 
                 // Verificar la contraseña
                 if (password_verify($contrasena, $row['contrasena'])) {
-                    // No devolver la contraseña por seguridad
+                    // No devolver la contraseña de login por seguridad
                     unset($row['contrasena']);
                     return $row;
                 }
@@ -102,8 +104,8 @@ class Usuario {
      */
     public function crear() {
         $query = "INSERT INTO " . $this->table_name . " 
-                  (cedula, nombre_completo, usuario, contrasena, estado, rol) 
-                  VALUES (:cedula, :nombre_completo, :usuario, :contrasena, :estado, :rol)";
+                  (cedula, nombre_completo, usuario, contrasena, estado, rol, extension, sip_password) 
+                  VALUES (:cedula, :nombre_completo, :usuario, :contrasena, :estado, :rol, :extension, :sip_password)";
 
         $stmt = $this->conn->prepare($query);
 
@@ -116,6 +118,12 @@ class Usuario {
         $stmt->bindParam(':contrasena', $hashed_password);
         $stmt->bindParam(':estado', $this->estado);
         $stmt->bindParam(':rol', $this->rol);
+        
+        // WebRTC Softphone: Bindear extensión y password SIP (pueden ser NULL)
+        $extension_value = $this->extension ?? null;
+        $sip_password_value = $this->sip_password ?? null;
+        $stmt->bindParam(':extension', $extension_value);
+        $stmt->bindParam(':sip_password', $sip_password_value);
 
         return $stmt->execute();
     }
