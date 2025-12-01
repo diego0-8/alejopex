@@ -13,11 +13,13 @@
 // Usa 'ws://' si NO tienes SSL configurado
 // Usa 'wss://' si tienes SSL/certificado configurado
 // Servidor configurado para Control Next App
-define('ASTERISK_WSS_SERVER', 'wss://192.168.65.190:8089/ws');
+// define('ASTERISK_WSS_SERVER', 'wss://192.168.65.190:8089/ws');
+define('ASTERISK_WSS_SERVER', 'wss://192.168.65.189:8089/ws');
 
 // Dominio SIP (debe coincidir con el 'realm' en pjsip.conf)
 // Dominio del servidor PBX
-define('ASTERISK_SIP_DOMAIN', '192.168.65.190');
+// define('ASTERISK_SIP_DOMAIN', '190.60.96.10');
+ define('ASTERISK_SIP_DOMAIN', '190.60.96.10');
 
 // Puerto WSS de Asterisk (por defecto 8089)
 define('ASTERISK_WSS_PORT', 8089);
@@ -34,8 +36,8 @@ define('ASTERISK_STUN_SERVER', 'stun:stun.l.google.com:19302');
 // ¿Usar servidor TURN? (true/false)
 // IMPORTANTE: Un servidor TURN es ALTAMENTE RECOMENDADO para garantizar audio bidireccional
 // cuando hay firewalls estrictos o NATs simétricos
-// ACTIVADO CON SERVIDOR PÚBLICO TEMPORAL (para pruebas)
-define('ASTERISK_USE_TURN', true);
+// PARA SERVIDOR LOCAL (sin NAT): Desactivar TURN y usar solo STUN
+define('ASTERISK_USE_TURN', false);
 
 // Configuración del servidor TURN
 // OPCIÓN 1: Servidor TURN propio (RECOMENDADO para producción)
@@ -48,67 +50,31 @@ define('ASTERISK_TURN_CREDENTIAL', ''); // Contraseña para autenticación TURN
 // Metered.ca ofrece un servidor TURN público gratuito para pruebas
 // IMPORTANTE: Este servidor es solo para pruebas, NO para producción
 // Puede tener limitaciones de ancho de banda y latencia
-// ACTIVADO TEMPORALMENTE PARA RESOLVER PROBLEMA DE RED
-define('ASTERISK_USE_PUBLIC_TURN', true); // Activado para usar TURN público temporal
-// Si ASTERISK_USE_PUBLIC_TURN = true, se usará el servidor de Metered.ca automáticamente
+// Para entorno local NO usamos TURN. Mantener en false.
+define('ASTERISK_USE_PUBLIC_TURN', false);
+// Si ASTERISK_USE_PUBLIC_TURN = true, se usaría el servidor de Metered.ca automáticamente
+
+// Puerto RTP esperado de Asterisk dentro del rango 10000-20000
+// Usado para diagnósticos y advertencias en el cliente WebRTC
+define('ASTERISK_PREFERRED_RTP_PORT', 10000);
 
 // Servidores ICE (STUN/TURN) para WebRTC
 // Estos servidores son esenciales para que el audio se transporte correctamente
 // cuando los clientes están detrás de NAT/firewalls
 // Formato: array de arrays con 'urls', opcionalmente 'username' y 'credential' para TURN
 // IMPORTANTE: Debe ser un array PHP válido, NO una cadena vacía
-// 
+//
 // NOTA: En PHP < 7.0, define() no soporta arrays directamente, por lo que usamos una función
 function getAsteriskIceServers() {
-    $servers = [
-        // STUN Servers (para descubrir la IP pública - NECESARIO)
-        // Múltiples servidores STUN para mayor confiabilidad
+    // CRÍTICO: Configurar STUN servers para resolver problemas RTP
+    // Sin STUN/TURN, WebRTC no puede establecer conexiones RTP
+    return [
         ['urls' => 'stun:stun.l.google.com:19302'],
         ['urls' => 'stun:stun1.l.google.com:19302'],
         ['urls' => 'stun:stun2.l.google.com:19302'],
         ['urls' => 'stun:stun3.l.google.com:19302'],
-        // Servidores STUN alternativos (backup)
-        ['urls' => 'stun:stun.stunprotocol.org:3478'],
+        ['urls' => 'stun:stun4.l.google.com:19302']
     ];
-    
-    // Agregar servidor TURN si está configurado
-    if (defined('ASTERISK_USE_TURN') && ASTERISK_USE_TURN) {
-        $turnServer = defined('ASTERISK_TURN_SERVER') ? ASTERISK_TURN_SERVER : '';
-        $turnUsername = defined('ASTERISK_TURN_USERNAME') ? ASTERISK_TURN_USERNAME : '';
-        $turnCredential = defined('ASTERISK_TURN_CREDENTIAL') ? ASTERISK_TURN_CREDENTIAL : '';
-        $usePublicTurn = defined('ASTERISK_USE_PUBLIC_TURN') ? ASTERISK_USE_PUBLIC_TURN : false;
-        
-        // Si hay un servidor TURN propio configurado, usarlo
-        if (!empty($turnServer)) {
-            $turnConfig = ['urls' => $turnServer];
-            
-            // Agregar credenciales si están configuradas
-            if (!empty($turnUsername) && !empty($turnCredential)) {
-                $turnConfig['username'] = $turnUsername;
-                $turnConfig['credential'] = $turnCredential;
-            }
-            
-            $servers[] = $turnConfig;
-        }
-        // Si no hay servidor propio pero se permite usar público, usar Metered.ca
-        elseif ($usePublicTurn) {
-            // Servidor TURN público de Metered.ca (solo para pruebas)
-            // Obtén credenciales gratuitas en: https://www.metered.ca/tools/openrelay/
-            // NOTA: Estas credenciales son de ejemplo, debes obtener las tuyas
-            $servers[] = [
-                'urls' => [
-                    'turn:a.relay.metered.ca:80',
-                    'turn:a.relay.metered.ca:80?transport=tcp',
-                    'turn:a.relay.metered.ca:443',
-                    'turn:a.relay.metered.ca:443?transport=tcp'
-                ],
-                'username' => 'openrelayproject', // Credenciales públicas de ejemplo
-                'credential' => 'openrelayproject'
-            ];
-        }
-    }
-    
-    return $servers;
 }
 
 // Para compatibilidad, también definimos como constante si PHP >= 7.0
@@ -134,6 +100,7 @@ function getWebRTCConfig() {
         : getAsteriskIceServers();
     
     // Validar que sea un array y no esté vacío
+    /* COMENTADO PARA RED LOCAL: No queremos fallback a Google
     if (!is_array($iceServers) || empty($iceServers)) {
         // Fallback: usar servidores STUN públicos por defecto
         $iceServers = [
@@ -141,13 +108,15 @@ function getWebRTCConfig() {
             ['urls' => 'stun:stun1.l.google.com:19302']
         ];
     }
+    */
     
     return [
         'wss_server' => ASTERISK_WSS_SERVER,
         'sip_domain' => ASTERISK_SIP_DOMAIN,
         'wss_port' => ASTERISK_WSS_PORT,
-        'stun_server' => ASTERISK_STUN_SERVER,
+        // 'stun_server' => ASTERISK_STUN_SERVER,
         'iceServers' => $iceServers, // Configuración de servidores ICE (array válido)
+        'preferred_rtp_port' => defined('ASTERISK_PREFERRED_RTP_PORT') ? ASTERISK_PREFERRED_RTP_PORT : 2000,
         'debug_mode' => ASTERISK_DEBUG_MODE,
     ];
 }

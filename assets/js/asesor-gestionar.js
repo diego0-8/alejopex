@@ -73,6 +73,9 @@ function cargarDatosCliente() {
                 // Configurar teléfonos con validación (cel1 a cel6)
                 configurarTelefonos(datosCliente);
                 
+                // Configurar email (solo mostrar si existe)
+                configurarEmail(datosCliente);
+                
                 clienteData = datosCliente;
                 console.log('Asesor_gestionar.js: Datos del cliente cargados exitosamente');
             } else {
@@ -382,40 +385,198 @@ function configurarTelefonos(datosCliente) {
         return;
     }
     
-    // Crear desplegable de celulares mostrando los números directamente + campo para copiar
-    let html = '<div style="display: flex; gap: 10px; align-items: center;">';
-    html += '<select id="telefono-select" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; font-weight: 500;">';
+    // Crear desplegable de celulares + campo clickeable para copiar al softphone
+    let html = '<div class="telefono-selector-container">';
+    
+    // Selector de teléfono
+    html += '<div>';
+    html += '<label for="telefono-select">Teléfono:</label>';
+    html += '<select id="telefono-select" style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; font-weight: 500; background: white; cursor: pointer; width: 100%; box-sizing: border-box;">';
     
     celulares.forEach((celular, index) => {
         html += `<option value="${celular.numero}">${celular.numero}</option>`;
     });
     
     html += '</select>';
-    html += '<input type="text" id="telefono-copiar" readonly style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; background: #f8f9fa; font-weight: 500; cursor: text;" placeholder="Número para copiar">';
+    html += '</div>';
+    
+    // Campo de texto clickeable para copiar al softphone
+    html += '<div>';
+    html += '<label for="telefono-softphone">Llamar:</label>';
+    html += '<div style="position: relative; width: 100%; box-sizing: border-box;">';
+    html += '<input type="text" id="telefono-softphone" readonly class="telefono-softphone-input" style="width: 100%; padding: 10px 40px 10px 12px; border: 2px solid #007bff; border-radius: 4px; font-size: 14px; background: #f8f9fa; font-weight: 600; color: #007bff; cursor: pointer; transition: all 0.3s ease; box-sizing: border-box;" placeholder="Haz clic para copiar al softphone" title="Haz clic para copiar este número al softphone">';
+    html += '<i class="fas fa-phone-alt" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #007bff; pointer-events: none;"></i>';
+    html += '</div>';
+    html += '</div>';
+    
     html += '</div>';
     
     container.innerHTML = html;
     
     // Configurar eventos
     const select = document.getElementById('telefono-select');
-    const campoCopiar = document.getElementById('telefono-copiar');
+    const campoSoftphone = document.getElementById('telefono-softphone');
     
-    if (select && campoCopiar) {
+    if (select && campoSoftphone) {
+        // Función para copiar número al softphone
+        const copiarAlSoftphone = function(numero) {
+            console.log('Asesor_gestionar.js: Copiando número al softphone:', numero);
+            
+            // Verificar que el softphone esté disponible
+            if (typeof window.webrtcSoftphone === 'undefined' || window.webrtcSoftphone === null) {
+                console.warn('Asesor_gestionar.js: Softphone no está disponible aún');
+                mostrarMensajeTemporal('El softphone se está inicializando. Por favor, espera un momento.', 'warning');
+                return false;
+            }
+            
+            // Verificar que el softphone tenga el método para establecer el número
+            if (typeof window.webrtcSoftphone.setNumber === 'function') {
+                window.webrtcSoftphone.setNumber(numero);
+                mostrarMensajeTemporal('Número copiado al softphone. Presiona el botón de llamar.', 'success');
+                return true;
+            } else if (typeof window.webrtcSoftphone.currentNumber !== 'undefined') {
+                // Método alternativo: establecer directamente el número y actualizar el display
+                window.webrtcSoftphone.currentNumber = numero;
+                if (typeof window.webrtcSoftphone.updateNumberDisplay === 'function') {
+                    window.webrtcSoftphone.updateNumberDisplay();
+                }
+                mostrarMensajeTemporal('Número copiado al softphone. Presiona el botón de llamar.', 'success');
+                return true;
+            } else {
+                console.error('Asesor_gestionar.js: No se pudo copiar el número al softphone');
+                mostrarMensajeTemporal('Error al copiar el número. Intenta nuevamente.', 'error');
+                return false;
+            }
+        };
+        
         // Evento para actualizar el campo cuando cambia la selección
         select.addEventListener('change', function() {
-            campoCopiar.value = this.value;
-            console.log('Asesor_gestionar.js: Celular seleccionado:', this.value);
+            const numeroSeleccionado = this.value;
+            campoSoftphone.value = numeroSeleccionado;
+            console.log('Asesor_gestionar.js: Celular seleccionado:', numeroSeleccionado);
+        });
+        
+        // Evento de clic en el campo de texto para copiar al softphone
+        campoSoftphone.addEventListener('click', function() {
+            const numero = this.value;
+            if (numero && numero.trim() !== '') {
+                copiarAlSoftphone(numero);
+                
+                // Efecto visual de feedback
+                this.style.background = '#d4edda';
+                this.style.borderColor = '#28a745';
+                setTimeout(() => {
+                    this.style.background = '#f8f9fa';
+                    this.style.borderColor = '#007bff';
+                }, 500);
+            } else {
+                mostrarMensajeTemporal('No hay número seleccionado', 'warning');
+            }
+        });
+        
+        // También permitir copiar al portapapeles con doble clic
+        campoSoftphone.addEventListener('dblclick', function() {
+            const numero = this.value;
+            if (numero && numero.trim() !== '') {
+                // Copiar al portapapeles
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(numero).then(() => {
+                        mostrarMensajeTemporal('Número copiado al portapapeles', 'success');
+                    }).catch(() => {
+                        // Fallback para navegadores antiguos
+                        this.select();
+                        document.execCommand('copy');
+                        mostrarMensajeTemporal('Número copiado al portapapeles', 'success');
+                    });
+                } else {
+                    // Fallback para navegadores antiguos
+                    this.select();
+                    document.execCommand('copy');
+                    mostrarMensajeTemporal('Número copiado al portapapeles', 'success');
+                }
+            }
         });
         
         // Seleccionar automáticamente el primer celular
         if (celulares.length > 0) {
             select.value = celulares[0].numero;
-            campoCopiar.value = celulares[0].numero;
+            campoSoftphone.value = celulares[0].numero;
             console.log('Asesor_gestionar.js: Primer celular seleccionado:', celulares[0].numero);
         }
     }
     
     console.log('Asesor_gestionar.js: Desplegable de celulares configurado exitosamente');
+}
+
+/**
+ * Configurar email del cliente (solo mostrar si existe)
+ * @param {object} datosCliente - Datos del cliente
+ */
+function configurarEmail(datosCliente) {
+    console.log('Asesor_gestionar.js: Configurando email del cliente');
+    
+    const emailContainer = document.getElementById('cliente-email-container');
+    const emailSpan = document.getElementById('cliente-email');
+    
+    if (!emailContainer || !emailSpan) {
+        console.warn('Asesor_gestionar.js: No se encontraron los elementos del email');
+        return;
+    }
+    
+    // Obtener email del cliente
+    const email = datosCliente.email || datosCliente.EMAIL || null;
+    
+    // Validar que el email no esté vacío
+    const tieneEmail = email && email.trim() !== '' && email !== 'null' && email !== 'NULL' && email.toLowerCase() !== 'null';
+    
+    if (tieneEmail) {
+        // Mostrar el contenedor y establecer el email
+        emailContainer.style.display = 'flex';
+        emailSpan.textContent = email.trim();
+        emailSpan.style.color = '#007bff';
+        emailSpan.style.fontWeight = '500';
+        console.log('Asesor_gestionar.js: Email mostrado:', email.trim());
+    } else {
+        // Ocultar el contenedor si no hay email
+        emailContainer.style.display = 'none';
+        console.log('Asesor_gestionar.js: Cliente sin email registrado, campo oculto');
+    }
+}
+
+// Función auxiliar para mostrar mensajes temporales
+function mostrarMensajeTemporal(mensaje, tipo = 'info') {
+    // Crear elemento de mensaje si no existe
+    let mensajeDiv = document.getElementById('mensaje-temporal-telefono');
+    if (!mensajeDiv) {
+        mensajeDiv = document.createElement('div');
+        mensajeDiv.id = 'mensaje-temporal-telefono';
+        mensajeDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; padding: 12px 20px; border-radius: 6px; font-size: 14px; font-weight: 500; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: all 0.3s ease;';
+        document.body.appendChild(mensajeDiv);
+    }
+    
+    // Colores según el tipo
+    const colores = {
+        success: { bg: '#d4edda', border: '#28a745', text: '#155724' },
+        error: { bg: '#f8d7da', border: '#dc3545', text: '#721c24' },
+        warning: { bg: '#fff3cd', border: '#ffc107', text: '#856404' },
+        info: { bg: '#d1ecf1', border: '#17a2b8', text: '#0c5460' }
+    };
+    
+    const color = colores[tipo] || colores.info;
+    mensajeDiv.style.background = color.bg;
+    mensajeDiv.style.border = `2px solid ${color.border}`;
+    mensajeDiv.style.color = color.text;
+    mensajeDiv.textContent = mensaje;
+    mensajeDiv.style.display = 'block';
+    mensajeDiv.style.opacity = '1';
+    
+    // Ocultar después de 3 segundos
+    setTimeout(() => {
+        mensajeDiv.style.opacity = '0';
+        setTimeout(() => {
+            mensajeDiv.style.display = 'none';
+        }, 300);
+    }, 3000);
 }
 
 // ========================================
@@ -1377,8 +1538,6 @@ function mostrarModalAgregarInfo() {
                         <div id="telefonos-contenedor">
                             <div class="telefono-input-group" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
                                 <input type="text" name="nuevo-telefono[]" placeholder="Número de teléfono (opcional)" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
-                                <input type="radio" name="telefono-principal" value="0" checked onchange="actualizarTelefonoPrincipal(this)" style="cursor: pointer;">
-                                <label style="margin: 0; cursor: pointer;" onclick="event.preventDefault(); this.previousElementSibling.click();">Principal</label>
                                 <button type="button" onclick="eliminarTelefono(this)" style="background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;" disabled><i class="fas fa-trash"></i></button>
                             </div>
                         </div>
@@ -1426,8 +1585,6 @@ function agregarTelefono() {
     nuevoTelefono.style.cssText = 'display: flex; gap: 10px; margin-bottom: 10px; align-items: center;';
     nuevoTelefono.innerHTML = `
         <input type="text" name="nuevo-telefono[]" placeholder="Número de teléfono (opcional)" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
-        <input type="radio" name="telefono-principal" value="${numTelefonos}" onchange="actualizarTelefonoPrincipal(this)" style="cursor: pointer;">
-        <label style="margin: 0; cursor: pointer;" onclick="event.preventDefault(); this.previousElementSibling.click();">Principal</label>
         <button type="button" onclick="eliminarTelefono(this)" style="background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;"><i class="fas fa-trash"></i></button>
     `;
     
@@ -1437,16 +1594,7 @@ function agregarTelefono() {
     actualizarBotonesEliminar();
 }
 
-function actualizarTelefonoPrincipal(radio) {
-    // Deseleccionar todos los demás radio buttons
-    const todosRadios = document.querySelectorAll('input[name="telefono-principal"]');
-    todosRadios.forEach(r => {
-        if (r !== radio) {
-            r.checked = false;
-        }
-    });
-    console.log('Teléfono principal actualizado:', radio.value);
-}
+// Función eliminada: actualizarTelefonoPrincipal - Ya no se usa la opción de principal
 
 function eliminarTelefono(btn) {
     const contenedor = document.getElementById('telefonos-contenedor');
@@ -1460,15 +1608,6 @@ function eliminarTelefono(btn) {
     
     if (grupo) {
         grupo.remove();
-        
-        // Actualizar los valores de los radio buttons para mantener consistencia
-        const grupos = contenedor.querySelectorAll('.telefono-input-group');
-        grupos.forEach((g, index) => {
-            const radio = g.querySelector('input[type="radio"]');
-            if (radio) {
-                radio.value = index;
-            }
-        });
         
         // Si solo queda uno, deshabilitar su botón de eliminar
         if (contenedor.children.length === 1) {
@@ -1509,17 +1648,14 @@ function guardarNuevaInformacion() {
         datosToSend.email = email.trim();
     }
     
-    // Procesar teléfonos solo si se ingresaron
+    // Procesar teléfonos solo si se ingresaron (sin opción de principal)
     if (telefonos.some(tel => tel && tel.trim() !== '')) {
-        const telefonoPrincipalIndex = parseInt(formData.get('telefono-principal') || '0');
         datosToSend.telefonos = [];
         
-        telefonos.forEach((tel, index) => {
+        telefonos.forEach((tel) => {
             if (tel && tel.trim() !== '') {
                 datosToSend.telefonos.push({
-                    numero: tel.trim(),
-                    index: index,
-                    esPrincipal: index === telefonoPrincipalIndex
+                    numero: tel.trim()
                 });
             }
         });
@@ -1562,6 +1698,12 @@ function guardarNuevaInformacion() {
             // Recargar datos del cliente para reflejar cambios (siempre, porque puede haber actualizado cualquier campo)
             if (datosToSend.email || (datosToSend.telefonos && datosToSend.telefonos.length > 0)) {
                 cargarDatosCliente();
+                // Si se agregó un email, también recargar para mostrarlo
+                if (datosToSend.email) {
+                    setTimeout(() => {
+                        cargarDatosCliente();
+                    }, 500);
+                }
             }
             
             // Si se agregaron o modificaron teléfonos, recargar también los contratos (que incluyen el selector)

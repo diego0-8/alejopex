@@ -45,6 +45,10 @@
                                     <span>Cargando...</span>
                                 </div>
                             </div>
+                            <div class="cliente-dato" id="cliente-email-container" style="display: none;">
+                                <span class="dato-label"><i class="fas fa-envelope"></i> Email:</span>
+                                <span id="cliente-email">-</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -137,24 +141,18 @@
                                 </div>
                             </div>
                         </div>
-                        
-                        <!-- Área para Staqueue -->
-                        <div class="staqueue-section">
-                            <div class="staqueue-banner">
-                                <div class="staqueue-texto">
-                                    <strong><i class="fas fa-phone-square"></i> Ingrese a Staqueue</strong>
-                                    <p>Accede al sistema de marcado automático para realizar llamadas</p>
-                                </div>
-                                <a href="https://estaqueue.udpsa.com/loginMarcador.html" target="_blank" class="staqueue-link"><i class="fas fa-external-link-alt"></i> Dale aquí</a>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- COLUMNA 3: OBSERVACIONES Y CANALES -->
+            <!-- COLUMNA 3: SOFTPHONE, OBSERVACIONES Y CANALES -->
             <div class="columna-tres">
-                <!-- Observaciones -->
+                <!-- Softphone WebRTC - Siempre visible -->
+                <div class="seccion-softphone-wrapper" style="margin-bottom: 20px;">
+                    <div id="webrtc-softphone" class="webrtc-softphone-panel inline"></div>
+                </div>
+
+                <!-- Observaciones y Comentarios -->
                 <div class="seccion-observaciones">
                     <h3><i class="fas fa-comment-dots"></i> Observaciones y Comentarios</h3>
                     <p class="instrucciones">Documente las interacciones y seguimientos pertinentes</p>
@@ -710,73 +708,7 @@
 
     <!-- WebRTC Softphone Integration -->
     <script src="assets/js/sip.min.js"></script>
-    <script>
-    // Verificación mejorada de carga de SIP.js
-    (function verificarSIPjs() {
-        let intentos = 0;
-        const maxIntentos = 50;
-        
-        function verificar() {
-            intentos++;
-            
-            // Verificar si SIP.js está completamente cargado
-            if (typeof SIP !== 'undefined' && 
-                typeof SIP.UserAgent !== 'undefined' && 
-                typeof SIP.UserAgent.makeURI === 'function') {
-                
-                console.log('✅ SIP.js cargado correctamente (intentos: ' + intentos + ')');
-                console.log('✅ Versión:', SIP.version || 'Unknown');
-                window.sipjsLoaded = true;
-                
-                // Cargar el softphone ahora que SIP.js está listo
-                const scriptSoftphone = document.createElement('script');
-                scriptSoftphone.src = 'assets/js/webrtc-softphone.js';
-                scriptSoftphone.onload = function() {
-                    console.log('✅ webrtc-softphone.js cargado');
-                };
-                document.head.appendChild(scriptSoftphone);
-                
-                return;
-            }
-            
-            if (intentos < maxIntentos) {
-                if (intentos % 10 === 0) {
-                    console.log('⏳ Esperando SIP.js... (' + intentos + '/' + maxIntentos + ')');
-                }
-                setTimeout(verificar, 100);
-            } else {
-                console.error('❌ SIP.js no se cargó después de ' + (maxIntentos * 100) + 'ms');
-                console.error('Estado actual:', {
-                    'typeof SIP': typeof SIP,
-                    'SIP.UserAgent': typeof (typeof SIP !== 'undefined' ? SIP.UserAgent : undefined),
-                    'SIP.UserAgent.makeURI': typeof (typeof SIP !== 'undefined' && SIP.UserAgent ? SIP.UserAgent.makeURI : undefined)
-                });
-                
-                // Intentar cargar desde CDN como fallback
-                console.log('🔄 Intentando cargar desde CDN...');
-                const scriptCDN = document.createElement('script');
-                scriptCDN.src = 'https://unpkg.com/sip.js@0.21.2/dist/sip.min.js';
-                scriptCDN.onload = function() {
-                    console.log('✅ SIP.js cargado desde CDN');
-                    window.sipjsLoaded = true;
-                    
-                    // Cargar softphone después de CDN
-                    const scriptSoftphone = document.createElement('script');
-                    scriptSoftphone.src = 'assets/js/webrtc-softphone.js';
-                    document.head.appendChild(scriptSoftphone);
-                };
-                scriptCDN.onerror = function() {
-                    console.error('❌ Error cargando SIP.js desde CDN');
-                    alert('Error crítico: No se pudo cargar SIP.js. El softphone no funcionará.');
-                };
-                document.head.appendChild(scriptCDN);
-            }
-        }
-        
-        // Iniciar verificación después de un momento
-        setTimeout(verificar, 100);
-    })();
-    </script>
+    <script src="assets/js/webrtc-softphone.js"></script>
     <?php
     // Incluir configuración WebRTC
     require_once 'config/asterisk.php';
@@ -794,17 +726,11 @@
         password: '<?php echo $_SESSION['usuario_sip_password'] ?? ''; ?>',
         display_name: '<?php echo $_SESSION['usuario_nombre'] ?? 'Asesor'; ?>',
         stun_server: '<?php echo $webrtc_config['stun_server']; ?>',
-        // Configuración de servidores ICE (STUN/TURN) - OPCIÓN 1
-        // CRÍTICO: Debe ser un array válido para que WebRTC funcione correctamente
+        preferredRtpPort: <?php echo (int) ($webrtc_config['preferred_rtp_port'] ?? 10000); ?>,
         iceServers: <?php 
             $iceServers = $webrtc_config['iceServers'] ?? [];
-            // Asegurar que sea un array válido
             if (!is_array($iceServers) || empty($iceServers)) {
-                // Fallback: servidores STUN públicos
-                $iceServers = [
-                    ['urls' => 'stun:stun.l.google.com:19302'],
-                    ['urls' => 'stun:stun1.l.google.com:19302']
-                ];
+                $iceServers = [];
             }
             echo json_encode($iceServers, JSON_UNESCAPED_SLASHES);
         ?>,
@@ -862,6 +788,38 @@
     } else {
         inicializarSoftphoneConVerificacion();
     }
+    
+    // Script de verificación y ajuste del diseño
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            const panel = document.getElementById('webrtc-softphone');
+            if (panel) {
+                // Asegurar que tenga la clase inline
+                if (!panel.classList.contains('inline')) {
+                    panel.classList.add('inline');
+                }
+                
+                // Asegurar que esté visible
+                panel.style.display = 'block';
+                panel.style.visibility = 'visible';
+                panel.style.opacity = '1';
+                
+                // Verificar que todos los elementos estén presentes
+                const dialpad = panel.querySelector('.dialpad');
+                const actionButtons = panel.querySelector('.action-buttons');
+                const numberDisplay = panel.querySelector('.number-display');
+                
+                if (dialpad && actionButtons && numberDisplay) {
+                    console.log('✅ Softphone inline configurado correctamente');
+                    console.log('   - Dialpad:', dialpad.children.length, 'botones');
+                    console.log('   - Botones de acción:', actionButtons.children.length, 'botones');
+                    console.log('   - Display de número:', numberDisplay ? 'OK' : 'FALTA');
+                } else {
+                    console.warn('⚠️ Algunos elementos del softphone no se encontraron');
+                }
+            }
+        }, 1000);
+    });
 
     // Función global para toggle
     function toggleSoftphone() {
@@ -894,6 +852,320 @@
     console.warn('⚠️ Usuario sin extensión WebRTC asignada');
     </script>
     <?php endif; ?>
+
+    <style>
+    /* Estilos para el softphone inline en la columna 3 */
+    .seccion-softphone-wrapper {
+        background: white;
+        border-radius: 8px;
+        padding: 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border: 1px solid #dee2e6;
+        margin-bottom: 20px;
+        overflow: hidden;
+        max-width: 100%;
+    }
+    
+    /* Panel inline del softphone - MÁS ESTRECHO Y MÁS ALTO */
+    .webrtc-softphone-panel.inline {
+        position: relative !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        width: 38% !important;
+        max-width: 100% !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        background: transparent !important;
+        transform: none !important;
+        top: auto !important;
+        left: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+    }
+    
+    .webrtc-softphone-panel.inline.hidden {
+        display: none !important;
+    }
+    
+    /* Header del softphone - COMPACTO */
+    .webrtc-softphone-panel.inline .softphone-header {
+        background: #007bff;
+        color: white;
+        padding: 8px 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-radius: 0;
+        margin-top: 20px;
+        width: 370px;
+    }
+    
+    .webrtc-softphone-panel.inline .softphone-header h3 {
+        margin: 0;
+        color: white;
+        font-size: 14px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .webrtc-softphone-panel.inline .softphone-header-actions {
+        display: flex;
+        gap: 6px;
+    }
+    
+    .webrtc-softphone-panel.inline .softphone-btn-icon {
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+    }
+    
+    .webrtc-softphone-panel.inline .softphone-btn-icon:hover {
+        background: rgba(255,255,255,0.3);
+    }
+    
+    /* Body del softphone - MÁS ESTRECHO Y MÁS ALTO */
+    .webrtc-softphone-panel.inline .softphone-body {
+        padding: 12px 8px;
+        background: white;
+        width: 385px;
+    }
+    
+    /* Status indicator - COMPACTO */
+    .webrtc-softphone-panel.inline .softphone-status {
+        margin-bottom: 10px;
+        text-align: center;
+    }
+    
+    .webrtc-softphone-panel.inline .status-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 12px;
+    }
+    
+    /* Number display - MÁS ESTRECHO Y MÁS ALTO */
+    .webrtc-softphone-panel.inline .number-input-container {
+        margin-bottom: 10px;
+    }
+    
+    .webrtc-softphone-panel.inline .number-display {
+        background: #f8f9fa;
+        border: 2px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px 6px;
+        text-align: center;
+        font-size: 15px;
+        font-weight: 600;
+        color: #333;
+        min-height: 22px;
+    }
+    
+    /* Dialpad - MÁS ESTRECHO Y MÁS ALTO */
+    .webrtc-softphone-panel.inline .dialpad {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+        margin-bottom: 10px;
+        max-width: 100%;
+    }
+    
+    .webrtc-softphone-panel.inline .dialpad-btn {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px 2px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #333;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 45px;
+    }
+    
+    .webrtc-softphone-panel.inline .dialpad-btn:hover {
+        background: #f8f9fa;
+        border-color: #007bff;
+    }
+    
+    .webrtc-softphone-panel.inline .dialpad-btn-letter {
+        font-size: 8px;
+        color: #666;
+        margin-top: 1px;
+    }
+    
+    /* Action buttons - MÁS ESTRECHO Y MÁS ALTO */
+    .webrtc-softphone-panel.inline .action-buttons {
+        display: flex;
+        gap: 5px;
+        margin-bottom: 10px;
+    }
+    
+    .webrtc-softphone-panel.inline .action-btn {
+        flex: 1;
+        padding: 10px 6px;
+        border: none;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        transition: all 0.2s;
+        min-height: 38px;
+    }
+    
+    .webrtc-softphone-panel.inline .delete-btn {
+        background: #dc3545;
+        color: white;
+    }
+    
+    .webrtc-softphone-panel.inline .delete-btn:hover {
+        background: #c82333;
+    }
+    
+    .webrtc-softphone-panel.inline .call-btn {
+        background: linear-gradient(135deg, #28a745, #20c997);
+        color: white;
+    }
+    
+    .webrtc-softphone-panel.inline .call-btn:hover {
+        background: linear-gradient(135deg, #218838, #1ea080);
+    }
+    
+    .webrtc-softphone-panel.inline .hangup-btn {
+        background: #dc3545;
+        color: white;
+    }
+    
+    .webrtc-softphone-panel.inline .hangup-btn:hover {
+        background: #c82333;
+    }
+    
+    /* Call info - MÁS ESTRECHO Y MÁS ALTO */
+    .webrtc-softphone-panel.inline .call-info {
+        background: #f8f9fa;
+        border-radius: 4px;
+        padding: 10px 6px;
+        margin-bottom: 10px;
+        text-align: center;
+        display: none;
+    }
+    
+    .webrtc-softphone-panel.inline .call-info.active {
+        display: block;
+    }
+    
+    .webrtc-softphone-panel.inline .call-info-number {
+        font-size: 14px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 4px;
+    }
+    
+    .webrtc-softphone-panel.inline .call-info-duration {
+        font-size: 13px;
+        color: #007bff;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+    
+    .webrtc-softphone-panel.inline .call-info-status {
+        font-size: 11px;
+        color: #666;
+    }
+    
+    /* Call controls - MÁS ESTRECHO Y MÁS ALTO */
+    .webrtc-softphone-panel.inline .call-controls {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 4px;
+    }
+    
+    .webrtc-softphone-panel.inline .control-btn {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 8px 4px;
+        font-size: 10px;
+        font-weight: 600;
+        color: #333;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        transition: all 0.2s;
+        min-height: 36px;
+    }
+    
+    .webrtc-softphone-panel.inline .control-btn:hover {
+        background: #f8f9fa;
+        border-color: #007bff;
+    }
+    
+    .webrtc-softphone-panel.inline .control-btn.active {
+        background: #007bff;
+        color: white;
+        border-color: #007bff;
+    }
+    
+    /* Status dot - COMPACTO */
+    .webrtc-softphone-panel.inline .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    
+    .webrtc-softphone-panel.inline .status-dot.connected {
+        background: #28a745;
+    }
+    
+    .webrtc-softphone-panel.inline .status-dot.disconnected {
+        background: #dc3545;
+    }
+    
+    .webrtc-softphone-panel.inline .status-dot.connecting {
+        background: #ffc107;
+        animation: pulse 1.5s infinite;
+    }
+    
+    .webrtc-softphone-panel.inline .status-dot.in-call {
+        background: #007bff;
+        animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    
+    /* Asegurar que no se oculte */
+    .webrtc-softphone-panel.inline {
+        z-index: 1 !important;
+    }
+    
+    /* Reducir márgenes generales del wrapper */
+    .seccion-softphone-wrapper {
+        margin-bottom: 15px;
+    }
+    </style>
 
 </body>
 </html>

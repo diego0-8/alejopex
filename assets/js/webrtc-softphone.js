@@ -18,11 +18,14 @@ class WebRTCSoftphone {
         this.audioDevices = [];
         this.preferredAudioDeviceId = config?.preferredAudioDeviceId || null;
         this.preferredAudioLabel = config?.preferredAudioLabel || null;
+        this.preferredAsteriskRtpPort = config?.preferredRtpPort || 10000;
         this.lastMediaStream = null;
         this.mediaStreamFactory = this._mediaStreamFactory.bind(this);
         this.preAcquiredStream = null; // Stream pre-adquirido para interceptar SIP.js
         this.originalGetUserMedia = null; // Referencia al método original
         this.remoteAudioElement = null; // Elemento de audio para reproducir audio remoto
+        this.ringAudio = null; // Para el tono de llamada entrante
+        this.ringbackAudio = null; // Para el tono de espera (cuando llamas a alguien)
         
         // Inicializar
         this.init();
@@ -38,6 +41,117 @@ class WebRTCSoftphone {
         this.attachEventListeners();
         this.initializeSIPjs();
         this.checkAudioPermissions();
+        
+        // Crear elementos de audio para los tonos
+        this.log('🔊 Inicializando elementos de audio para tonos...');
+        
+        // Determinar la ruta base del sitio
+        // Obtener la ruta base del proyecto desde la URL actual
+        let basePath = window.location.pathname;
+        
+        // Si la ruta termina con un archivo (ej: index.php, asesor_gestionar.php), removerlo
+        if (basePath.match(/\/[^/]+\.[^/]+$/)) {
+            basePath = basePath.replace(/\/[^/]+\.[^/]+$/, '');
+        }
+        
+        // Asegurar que termine con /
+        if (!basePath.endsWith('/')) {
+            basePath += '/';
+        }
+        
+        // Construir rutas de audio
+        const ringtonePath = basePath + 'assets/audio/ringtone.mp3';
+        const ringbackPath = basePath + 'assets/audio/ringback.mp3';
+        
+        this.log('   📍 Base path detectado:', basePath);
+        this.log('   📍 Ruta completa ringtone:', window.location.origin + ringtonePath);
+        this.log('   📍 Ruta completa ringback:', window.location.origin + ringbackPath);
+        
+        try {
+            // Ringtone (llamada entrante) - Usar ruta relativa al proyecto
+            this.log('   🎵 Intentando cargar ringtone desde:', ringtonePath);
+            this.ringAudio = new Audio(ringtonePath);
+            this.ringAudio.loop = true;
+            this.ringAudio.volume = 0.5;
+            this.ringAudio.preload = 'auto';
+            
+            // Eventos de diagnóstico para ringtone
+            this.ringAudio.addEventListener('loadstart', () => {
+                this.log('📥 ringtone.mp3: Iniciando carga desde:', this.ringAudio.src);
+            });
+            this.ringAudio.addEventListener('loadedmetadata', () => {
+                this.log('📊 ringtone.mp3: Metadata cargada, duración:', this.ringAudio.duration, 'segundos');
+            });
+            this.ringAudio.addEventListener('loadeddata', () => {
+                this.log('✅ ringtone.mp3: Datos cargados correctamente');
+            });
+            this.ringAudio.addEventListener('canplay', () => {
+                this.log('✅ ringtone.mp3: Listo para reproducir');
+                this.log('   📊 Estado:', this.ringAudio.readyState, '(HAVE_ENOUGH_DATA = 4)');
+            });
+            this.ringAudio.addEventListener('canplaythrough', () => {
+                this.log('✅ ringtone.mp3: Puede reproducirse completamente sin interrupciones');
+            });
+            this.ringAudio.addEventListener('error', (e) => {
+                this.log('❌ Error al cargar ringtone.mp3');
+                this.log('   📍 Ruta intentada:', this.ringAudio.src);
+                this.log('   📍 Ruta completa:', window.location.origin + ringtonePath);
+                this.log('   💡 Verifica que el archivo existe en:', ringtonePath);
+                this.log('   💡 El softphone funcionará sin sonido de llamada entrante');
+                if (this.ringAudio.error) {
+                    this.log('   🔍 Código de error:', this.ringAudio.error.code);
+                    this.log('   🔍 Mensaje de error:', this.ringAudio.error.message);
+                }
+                this.ringAudio = null;
+            });
+            
+            // Ringback (llamada saliente) - Usar ruta relativa al proyecto
+            this.log('   🎵 Intentando cargar ringback desde:', ringbackPath);
+            this.ringbackAudio = new Audio(ringbackPath);
+            this.ringbackAudio.loop = true;
+            this.ringbackAudio.volume = 0.5;
+            this.ringbackAudio.preload = 'auto';
+            
+            // Eventos de diagnóstico para ringback
+            this.ringbackAudio.addEventListener('loadstart', () => {
+                this.log('📥 ringback.mp3: Iniciando carga desde:', this.ringbackAudio.src);
+            });
+            this.ringbackAudio.addEventListener('loadedmetadata', () => {
+                this.log('📊 ringback.mp3: Metadata cargada, duración:', this.ringbackAudio.duration, 'segundos');
+            });
+            this.ringbackAudio.addEventListener('loadeddata', () => {
+                this.log('✅ ringback.mp3: Datos cargados correctamente');
+            });
+            this.ringbackAudio.addEventListener('canplay', () => {
+                this.log('✅ ringback.mp3: Listo para reproducir');
+                this.log('   📊 Estado:', this.ringbackAudio.readyState, '(HAVE_ENOUGH_DATA = 4)');
+            });
+            this.ringbackAudio.addEventListener('canplaythrough', () => {
+                this.log('✅ ringback.mp3: Puede reproducirse completamente sin interrupciones');
+            });
+            this.ringbackAudio.addEventListener('error', (e) => {
+                this.log('❌ Error al cargar ringback.mp3');
+                this.log('   📍 Ruta intentada:', this.ringbackAudio.src);
+                this.log('   📍 Ruta completa:', window.location.origin + ringbackPath);
+                this.log('   💡 Verifica que el archivo existe en:', ringbackPath);
+                this.log('   💡 El softphone funcionará sin sonido de espera');
+                if (this.ringbackAudio.error) {
+                    this.log('   🔍 Código de error:', this.ringbackAudio.error.code);
+                    this.log('   🔍 Mensaje de error:', this.ringbackAudio.error.message);
+                }
+                this.ringbackAudio = null;
+            });
+            
+            this.log('✅ Elementos de audio para tonos inicializados');
+            this.log('   📁 Ruta ringtone: ' + ringtonePath);
+            this.log('   📁 Ruta ringback: ' + ringbackPath);
+            this.log('   📁 URL completa ringtone: ' + window.location.origin + ringtonePath);
+            this.log('   📁 URL completa ringback: ' + window.location.origin + ringbackPath);
+        } catch (error) {
+            this.log('⚠️ Error al inicializar elementos de audio:', error);
+            this.ringAudio = null;
+            this.ringbackAudio = null;
+        }
     }
     
     /**
@@ -265,21 +379,7 @@ class WebRTCSoftphone {
             });
         }
         
-        // PRIORIDAD 2: Si hay configuración específica de TURN, agregarla
-        if (this.config && this.config.turnServer) {
-            const turnConfig = {
-                urls: this.config.turnServer.url || this.config.turnServer.urls,
-                username: this.config.turnServer.username,
-                credential: this.config.turnServer.credential || this.config.turnServer.password
-            };
-            
-            if (turnConfig.urls) {
-                iceServers.push(turnConfig);
-                this.log(`   ✅ Agregado servidor TURN: ${turnConfig.urls}`);
-            }
-        }
-        
-        // PRIORIDAD 3: Si hay configuración de STUN desde PHP (stun_server)
+        // PRIORIDAD 2: Si hay configuración de STUN desde PHP (stun_server)
         if (this.config && this.config.stun_server) {
             const stunUrl = this.config.stun_server.startsWith('stun:') 
                 ? this.config.stun_server 
@@ -288,7 +388,7 @@ class WebRTCSoftphone {
             this.log(`   ✅ Agregado servidor STUN desde configuración: ${stunUrl}`);
         }
         
-        // PRIORIDAD 4: Servidores STUN públicos de Google (fallback por defecto)
+        // PRIORIDAD 3: Servidores STUN públicos de Google (fallback por defecto)
         // Solo agregar si no hay configuración personalizada
         if (iceServers.length === 0 || !this.config || !this.config.iceServers) {
             iceServers.push(
@@ -494,20 +594,20 @@ class WebRTCSoftphone {
      */
     _verifyCodecs(sdp, tipo = 'local') {
         if (!sdp || typeof sdp !== 'string') return;
-        
+
         try {
             // Buscar línea m=audio que contiene los codecs
             const audioLineMatch = sdp.match(/m=audio\s+\d+\s+[^\r\n]+/);
             if (audioLineMatch) {
                 const audioLine = audioLineMatch[0];
                 this.log(`🎵 Codecs en SDP ${tipo}: ${audioLine}`);
-                
+
                 // Extraer los números de payload (codecs)
                 const codecNumbers = audioLine.match(/\d+/g);
                 if (codecNumbers && codecNumbers.length > 2) {
                     const payloads = codecNumbers.slice(2); // Saltar puerto y protocolo
                     this.log(`   Payloads (codecs): ${payloads.join(', ')}`);
-                    
+
                     // Mapear números a nombres de codecs
                     const codecMap = {
                         '0': 'PCMU (G.711 μ-law)',
@@ -519,24 +619,29 @@ class WebRTCSoftphone {
                         '111': 'Opus/48000',
                         '126': 'telephone-event/8000'
                     };
-                    
+
                     const codecNames = payloads.map(p => {
                         const name = codecMap[p] || `Desconocido (${p})`;
                         return `${p} (${name})`;
                     });
-                    
+
                     this.log(`   Codecs detectados: ${codecNames.join(', ')}`);
-                    
+
                     // Verificar si hay codecs compatibles con Asterisk (PCMU/PCMA)
                     const hasPCMU = payloads.includes('0');
                     const hasPCMA = payloads.includes('8');
-                    
+
                     if (hasPCMU || hasPCMA) {
                         this.log(`   ✅ Codecs compatibles con Asterisk detectados: ${hasPCMU ? 'PCMU' : ''} ${hasPCMA ? 'PCMA' : ''}`);
                     } else {
-                        this.log(`   ⚠️ No se detectaron codecs PCMU/PCMA - puede haber problemas de compatibilidad`);
+                        this.log(`   ❌ CRÍTICO: No se detectaron codecs PCMU/PCMA - Asterisk requiere estos codecs!`);
+                        this.log(`   🔧 SOLUCIÓN: Verificar configuración de codecs en Asterisk:`);
+                        this.log(`      - En /etc/asterisk/sip.conf o pjsip.conf: allow=ulaw,alaw`);
+                        this.log(`      - Reiniciar Asterisk después de cambios`);
                     }
                 }
+            } else {
+                this.log(`   ❌ CRÍTICO: No se encontró línea m=audio en SDP ${tipo}`);
             }
         } catch (error) {
             this.log(`⚠️ Error verificando codecs: ${error.message}`);
@@ -1044,16 +1149,94 @@ class WebRTCSoftphone {
             }
 
             inviter.stateChange.addListener((newState) => {
-                this.log('Estado de llamada:', newState);
+                this.log('🔔 Estado de llamada saliente:', newState);
                 
                 const stateStr = String(newState);
                 
-                if (stateStr === 'Established' || stateStr === '4' || newState === 'Established') {
+                // Estado: Progress (180 Ringing) - El teléfono remoto está sonando
+                if (stateStr === 'Progress' || stateStr === '2' || newState === 'Progress') {
+                    this.log('📞 Estado Progress detectado - Iniciando ringback tone');
+                    // ✅ SOLUCIÓN: Iniciar Tono de Ringback (el teléfono remoto está timbrando)
+                    if (this.ringbackAudio) {
+                        this.log('   📊 Estado del audio ringback:', {
+                            readyState: this.ringbackAudio.readyState,
+                            networkState: this.ringbackAudio.networkState,
+                            paused: this.ringbackAudio.paused,
+                            src: this.ringbackAudio.src,
+                            error: this.ringbackAudio.error ? {
+                                code: this.ringbackAudio.error.code,
+                                message: this.ringbackAudio.error.message
+                            } : null
+                        });
+                        
+                        // Verificar si hay errores de carga
+                        if (this.ringbackAudio.error) {
+                            this.log('❌ El archivo de ringback tiene errores:', this.ringbackAudio.error);
+                            this.log('   💡 Verifica que el archivo existe y es accesible');
+                        } else if (this.ringbackAudio.readyState >= 2) {
+                            // readyState >= 2 significa que hay datos suficientes para reproducir
+                            this.ringbackAudio.currentTime = 0; // Reiniciar desde el principio
+                            this.ringbackAudio.play()
+                                .then(() => {
+                                    this.log('✅ Ringback tone reproducido exitosamente');
+                                })
+                                .catch(e => {
+                                    this.log('⚠️ No se pudo iniciar el ringback tone');
+                                    this.log('   Error name:', e.name);
+                                    this.log('   Error message:', e.message);
+                                    this.log('   💡 Nota: El error puede ser por la política de autoplay de Chrome');
+                                });
+                        } else {
+                            this.log('⚠️ El archivo de ringback aún no está listo (readyState:', this.ringbackAudio.readyState + ')');
+                            this.log('   💡 Esperando a que el archivo se cargue...');
+                            // Esperar a que el archivo esté listo
+                            const tryPlayWhenReady = () => {
+                                if (this.ringbackAudio && this.ringbackAudio.readyState >= 2) {
+                                    this.ringbackAudio.currentTime = 0;
+                                    this.ringbackAudio.play()
+                                        .then(() => {
+                                            this.log('✅ Ringback tone reproducido después de esperar carga');
+                                        })
+                                        .catch(e => {
+                                            this.log('⚠️ Error al reproducir ringback después de carga:', e);
+                                        });
+                                } else if (this.ringbackAudio && this.ringbackAudio.readyState < 4) {
+                                    setTimeout(tryPlayWhenReady, 100);
+                                }
+                            };
+                            this.ringbackAudio.addEventListener('canplay', tryPlayWhenReady, { once: true });
+                        }
+                    } else {
+                        this.log('⚠️ ringbackAudio no está disponible (archivo no cargado o no existe)');
+                        this.log('   💡 Verifica que el archivo /assets/audio/ringback.mp3 existe');
+                    }
+                    this.updateCallInfo(this.currentNumber, 'Sonando...');
+                } 
+                // Estado: Established - Llamada conectada
+                else if (stateStr === 'Established' || stateStr === '4' || newState === 'Established') {
+                    this.log('✅ Llamada establecida - Deteniendo ringback tone');
+                    // ✅ Detener Tono de Ringback al contestar
+                    if (this.ringbackAudio) {
+                        this.ringbackAudio.pause();
+                        this.ringbackAudio.currentTime = 0; // Reiniciar
+                        this.log('✅ Ringback tone detenido');
+                    }
                     this.onCallStarted();
                     this.startCallTimer();
-                } else if (stateStr === 'Terminated' || stateStr === '5' || newState === 'Terminated') {
+                } 
+                // Estado: Terminated - Llamada terminada
+                else if (stateStr === 'Terminated' || stateStr === '5' || newState === 'Terminated') {
+                    this.log('📴 Llamada terminada - Deteniendo ringback tone');
+                    // ✅ Detener Tono de Ringback al colgar
+                    if (this.ringbackAudio) {
+                        this.ringbackAudio.pause();
+                        this.ringbackAudio.currentTime = 0; // Reiniciar
+                        this.log('✅ Ringback tone detenido');
+                    }
                     this.onCallEnded();
-                } else if (stateStr === 'Initial' || stateStr === '0') {
+                } 
+                // Otros estados
+                else if (stateStr === 'Initial' || stateStr === '0') {
                     this.updateCallInfo(this.currentNumber, 'Iniciando...');
                 } else if (stateStr === 'Sent' || stateStr === '1') {
                     this.updateCallInfo(this.currentNumber, 'Llamando...');
@@ -1076,7 +1259,7 @@ class WebRTCSoftphone {
                             this.log(`   Estado ICE: ${pc.iceConnectionState}`);
                             this.log(`   Estado conexión: ${pc.connectionState}`);
                             
-                            // OBTENER ESTADÍSTICAS RTP PARA VERIFICAR SI HAY DATOS LLEGANDO
+                            // OBTENER ESTADÍSTICAS RTP Y VERIFICAR CANDIDATOS ICE
                             try {
                                 const stats = await pc.getStats();
                                 let audioBytesReceived = 0;
@@ -1084,13 +1267,80 @@ class WebRTCSoftphone {
                                 let audioBytesSent = 0;
                                 let audioPacketsSent = 0;
                                 let hasInboundRtp = false;
+                                let relayCandidatesFound = 0;
+                                let srflxCandidatesFound = 0;
+                                let hostCandidatesFound = 0;
+                                let selectedCandidateType = null;
+                                
+                                // Verificar candidatos ICE
+                                stats.forEach((report) => {
+                                    if (report.type === 'local-candidate' || report.type === 'remote-candidate') {
+                                        if (report.candidateType === 'relay') {
+                                            relayCandidatesFound++;
+                                        } else if (report.candidateType === 'srflx') {
+                                            srflxCandidatesFound++;
+                                        } else if (report.candidateType === 'host') {
+                                            hostCandidatesFound++;
+                                        }
+                                    }
+                                    
+                                    // Verificar qué candidato se está usando
+                                    if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                                        const localCandidateId = report.localCandidateId;
+                                        stats.forEach((candidateReport) => {
+                                            if (candidateReport.id === localCandidateId) {
+                                                selectedCandidateType = candidateReport.candidateType;
+                                                this.log(`🎯 Candidato seleccionado para conexión: ${selectedCandidateType}`);
+                                                if (selectedCandidateType === 'relay') {
+                                                    this.log('   ✅ USANDO TURN (relay) - Conexión a través de servidor TURN');
+                                                } else if (selectedCandidateType === 'srflx') {
+                                                    this.log('   ⚠️ Usando STUN (srflx) - Conexión directa con IP pública');
+                                                    this.log('   ⚠️ Si no hay audio, puede ser que el firewall bloquee RTP');
+                                                } else {
+                                                    this.log('   ⚠️ Usando conexión directa (host) - Solo funciona en red local');
+                                                }
+                                            }
+                                        });
+                                    }
+                                });
+                                
+                                this.log(`📊 Candidatos ICE encontrados: ${relayCandidatesFound} relay, ${srflxCandidatesFound} srflx, ${hostCandidatesFound} host`);
+                                if (relayCandidatesFound === 0) {
+                                    this.log('   ⚠️ ADVERTENCIA: No se encontraron candidatos RELAY (TURN)');
+                                    this.log('   Esto significa que el servidor TURN no está funcionando o no se está usando');
+                                    this.log('   Posibles causas:');
+                                    this.log('   1. Credenciales TURN incorrectas');
+                                    this.log('   2. Servidor TURN no accesible desde tu red');
+                                    this.log('   3. Firewall bloqueando conexión al TURN');
+                                }
+                                
+                                // Información detallada de puertos RTP
+                                let localRtpPort = null;
+                                let remoteRtpPort = null;
+                                let localRtpIp = null;
+                                let remoteRtpIp = null;
                                 
                                 stats.forEach((report) => {
                                     if (report.type === 'inbound-rtp' && report.mediaType === 'audio') {
                                         hasInboundRtp = true;
                                         audioBytesReceived = report.bytesReceived || 0;
                                         audioPacketsReceived = report.packetsReceived || 0;
+                                        remoteRtpPort = report.port || null;
+                                        remoteRtpIp = report.remoteId ? (() => {
+                                            // Buscar la IP remota en los candidatos
+                                            let remoteIp = null;
+                                            stats.forEach((candidateReport) => {
+                                                if (candidateReport.id === report.remoteId && candidateReport.ip) {
+                                                    remoteIp = candidateReport.ip;
+                                                }
+                                            });
+                                            return remoteIp;
+                                        })() : null;
+                                        
                                         this.log(`   📊 RTP Remoto: ${audioBytesReceived} bytes recibidos, ${audioPacketsReceived} paquetes recibidos`);
+                                        if (remoteRtpIp && remoteRtpPort) {
+                                            this.log(`   📊 Puerto RTP Remoto (Asterisk): ${remoteRtpIp}:${remoteRtpPort}`);
+                                        }
                                         this.log(`   📊 Jitter: ${report.jitter || 'N/A'}, PacketsLost: ${report.packetsLost || 0}`);
                                         if (report.codecId) {
                                             this.log(`   📊 Codec ID: ${report.codecId}`);
@@ -1099,19 +1349,49 @@ class WebRTCSoftphone {
                                     if (report.type === 'outbound-rtp' && report.mediaType === 'audio') {
                                         audioBytesSent = report.bytesSent || 0;
                                         audioPacketsSent = report.packetsSent || 0;
+                                        localRtpPort = report.port || null;
+                                        localRtpIp = report.localId ? (() => {
+                                            // Buscar la IP local en los candidatos
+                                            let localIp = null;
+                                            stats.forEach((candidateReport) => {
+                                                if (candidateReport.id === report.localId && candidateReport.ip) {
+                                                    localIp = candidateReport.ip;
+                                                }
+                                            });
+                                            return localIp;
+                                        })() : null;
+                                        
                                         this.log(`   📊 RTP Local: ${audioBytesSent} bytes enviados, ${audioPacketsSent} paquetes enviados`);
+                                        if (localRtpIp && localRtpPort) {
+                                            this.log(`   📊 Puerto RTP Local (Cliente): ${localRtpIp}:${localRtpPort}`);
+                                        }
                                     }
                                 });
                                 
+                                // Mostrar información de puertos si está disponible
+                                if (localRtpPort && remoteRtpPort) {
+                                    this.log(`   🔌 Conexión RTP: Cliente ${localRtpIp || 'N/A'}:${localRtpPort} ↔ Asterisk ${remoteRtpIp || 'N/A'}:${remoteRtpPort}`);
+                                    if (audioBytesReceived === 0 && audioBytesSent === 0) {
+                                        this.log(`   ⚠️ ADVERTENCIA: Los puertos están configurados pero NO hay tráfico RTP`);
+                                        this.log(`   Esto indica que Asterisk puede no estar enviando audio o hay un firewall bloqueando`);
+                                    }
+                                }
+                                
                                 if (!hasInboundRtp) {
-                                    this.log('⚠️ ADVERTENCIA: No se encontró reporte inbound-rtp. Esto puede ser normal al inicio de la llamada.');
-                                } else if (audioBytesReceived === 0 && audioPacketsReceived === 0) {
-                                    this.log('❌ PROBLEMA CRÍTICO: No se están recibiendo paquetes RTP de audio.');
+                                    this.log('❌ PROBLEMA CRÍTICO: No se encontró reporte inbound-rtp.');
+                                    this.log('   Esto significa que NO se están recibiendo datos de audio de Asterisk.');
                                     this.log('   Posibles causas:');
-                                    this.log('   1. Firewall bloqueando puertos RTP (10000-20000 UDP)');
-                                    this.log('   2. NAT simétrico que requiere TURN');
-                                    this.log('   3. Problema de conectividad de red');
-                                    this.log('   SOLUCIÓN: Configurar servidor TURN o verificar firewall');
+                                    this.log('   1. Asterisk no está enviando audio (verificar configuración RTP)');
+                                    this.log('   2. Firewall bloqueando puertos RTP (10000-20000 UDP)');
+                                    this.log('   3. NAT simétrico que requiere TURN (pero TURN no se está usando)');
+                                    this.log('   4. Problema de conectividad de red');
+                                } else if (audioBytesReceived === 0 && audioPacketsReceived === 0) {
+                                    this.log('❌ PROBLEMA CRÍTICO: Reporte inbound-rtp existe pero NO hay datos.');
+                                    this.log('   Esto significa que el canal RTP está abierto pero no hay paquetes llegando.');
+                                    this.log('   Posibles causas:');
+                                    this.log('   1. Asterisk no está enviando audio (verificar en Asterisk)');
+                                    this.log('   2. Firewall bloqueando paquetes RTP específicos');
+                                    this.log('   3. Problema de codec/negociación');
                                 } else {
                                     this.log(`✅ Se están recibiendo datos de audio: ${audioBytesReceived} bytes, ${audioPacketsReceived} paquetes`);
                                 }
@@ -1216,28 +1496,183 @@ class WebRTCSoftphone {
                                                                     this.log(`   Track ${idx} después de play - enabled: ${audioTrack.enabled}, muted: ${audioTrack.muted}, readyState: ${audioTrack.readyState}`);
                                                                 });
                                                                 
-                                                                // VERIFICAR ESTADÍSTICAS RTP PARA DIAGNÓSTICO
+                                                                // VERIFICAR ESTADÍSTICAS RTP Y CANDIDATOS ICE PARA DIAGNÓSTICO COMPLETO
                                                                 try {
                                                                     const stats = await pc.getStats();
                                                                     let totalBytesReceived = 0;
                                                                     let totalPacketsReceived = 0;
+                                                                    let totalBytesSent = 0;
+                                                                    let totalPacketsSent = 0;
+                                                                    let usingRelay = false;
+                                                                    let usingSrflx = false;
+                                                                    let selectedCandidateInfo = null;
+                                                                    let relayCandidatesCount = 0;
+                                                                    let srflxCandidatesCount = 0;
+                                                                    
+                                                                    // Contar candidatos disponibles
+                                                                    stats.forEach((report) => {
+                                                                        if (report.type === 'local-candidate') {
+                                                                            if (report.candidateType === 'relay') {
+                                                                                relayCandidatesCount++;
+                                                                            } else if (report.candidateType === 'srflx') {
+                                                                                srflxCandidatesCount++;
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        // Verificar qué candidato se está usando
+                                                                        if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                                                                            const localCandidateId = report.localCandidateId;
+                                                                            stats.forEach((candidateReport) => {
+                                                                                if (candidateReport.id === localCandidateId) {
+                                                                                    selectedCandidateInfo = {
+                                                                                        type: candidateReport.candidateType,
+                                                                                        ip: candidateReport.ip,
+                                                                                        port: candidateReport.port
+                                                                                    };
+                                                                                    if (candidateReport.candidateType === 'relay') {
+                                                                                        usingRelay = true;
+                                                                                    } else if (candidateReport.candidateType === 'srflx') {
+                                                                                        usingSrflx = true;
+                                                                                    }
+                                                                                }
+                                                                            });
+                                                                        }
+                                                                    });
+                                                                    
+                                                                    // Obtener información de puertos RTP
+                                                                    let localRtpPort = null;
+                                                                    let remoteRtpPort = null;
+                                                                    let localRtpIp = null;
+                                                                    let remoteRtpIp = null;
+                                                                    
                                                                     stats.forEach((report) => {
                                                                         if (report.type === 'inbound-rtp' && report.mediaType === 'audio') {
                                                                             totalBytesReceived += (report.bytesReceived || 0);
                                                                             totalPacketsReceived += (report.packetsReceived || 0);
+                                                                            remoteRtpPort = report.port || null;
+                                                                            // Buscar IP remota en candidatos
+                                                                            if (report.remoteId) {
+                                                                                stats.forEach((candidateReport) => {
+                                                                                    if (candidateReport.id === report.remoteId && candidateReport.ip) {
+                                                                                        remoteRtpIp = candidateReport.ip;
+                                                                                    }
+                                                                                });
+                                                                            }
+                                                                        }
+                                                                        if (report.type === 'outbound-rtp' && report.mediaType === 'audio') {
+                                                                            totalBytesSent += (report.bytesSent || 0);
+                                                                            totalPacketsSent += (report.packetsSent || 0);
+                                                                            localRtpPort = report.port || null;
+                                                                            // Buscar IP local en candidatos
+                                                                            if (report.localId) {
+                                                                                stats.forEach((candidateReport) => {
+                                                                                    if (candidateReport.id === report.localId && candidateReport.ip) {
+                                                                                        localRtpIp = candidateReport.ip;
+                                                                                    }
+                                                                                });
+                                                                            }
                                                                         }
                                                                     });
                                                                     
-                                                                    if (totalBytesReceived === 0 && totalPacketsReceived === 0) {
-                                                                        this.log('❌ PROBLEMA DETECTADO: El elemento dice "playing" pero NO hay datos RTP llegando.');
-                                                                        this.log('   Esto confirma que el problema es de conectividad de red, NO del elemento de audio.');
-                                                                        this.log('   SOLUCIÓN RECOMENDADA: Configurar servidor TURN o verificar firewall/port forwarding.');
+                                                                    // DIAGNÓSTICO COMPLETO
+                                                                    this.log('═══════════════════════════════════════════════════════');
+                                                                    this.log('📊 DIAGNÓSTICO COMPLETO (después de 2 segundos):');
+                                                                    this.log('═══════════════════════════════════════════════════════');
+                                                                    this.log(`📤 Audio enviado: ${totalBytesSent} bytes, ${totalPacketsSent} paquetes`);
+                                                                    this.log(`📥 Audio recibido: ${totalBytesReceived} bytes, ${totalPacketsReceived} paquetes`);
+                                                                    this.log(`🎯 Candidatos disponibles: ${relayCandidatesCount} relay, ${srflxCandidatesCount} srflx`);
+                                                                    
+                                                                    // Información de puertos RTP
+                                                                    if (localRtpPort && remoteRtpPort) {
+                                                                        this.log(`🔌 Puertos RTP: Cliente ${localRtpIp || 'N/A'}:${localRtpPort} ↔ Asterisk ${remoteRtpIp || 'N/A'}:${remoteRtpPort}`);
+                                                                        this.log(`   💡 Asterisk está usando el puerto ${remoteRtpPort} para RTP`);
+                                                                        this.log(`   💡 Cliente está usando el puerto ${localRtpPort} para RTP`);
+                                                                        if (this.preferredAsteriskRtpPort) {
+                                                                            this.log(`   🎯 Puerto preferido configurado en cliente: ${this.preferredAsteriskRtpPort}`);
+                                                                        }
+                                                                        
+                                                                        // Verificar si los puertos están en el rango esperado
+                                                                        if (remoteRtpPort < 10000 || remoteRtpPort > 20000) {
+                                                                            this.log(`   ⚠️ ADVERTENCIA: Puerto de Asterisk (${remoteRtpPort}) está FUERA del rango típico (10000-20000)`);
+                                                                            this.log(`   Esto puede indicar un problema de configuración en Asterisk`);
+                                                                        }
+                                                                        
+                                                                        // Explicar que es normal que los puertos sean diferentes
+                                                                        this.log(`   ℹ️ NOTA: Es NORMAL que los puertos sean diferentes:`);
+                                                                        this.log(`      - Asterisk usa puertos 10000-20000 (configurado en rtp.conf)`);
+                                                                        this.log(`      - El cliente usa puertos dinámicos asignados por el sistema operativo`);
+                                                                        this.log(`      - El puerto del cliente (${localRtpPort}) puede estar fuera del rango 10000-20000`);
+                                                                        this.log(`      - Esto es CORRECTO y NO es un problema`);
                                                                     } else {
-                                                                        this.log(`✅ Datos de audio confirmados: ${totalBytesReceived} bytes, ${totalPacketsReceived} paquetes recibidos`);
-                                                                        if (self.remoteAudioElement.currentTime === 0) {
-                                                                            this.log('⚠️ Hay datos RTP pero el tiempo no avanza. Puede ser un problema del codec o del elemento de audio.');
+                                                                        this.log(`   ⚠️ No se pudo determinar los puertos RTP`);
+                                                                        if (this.preferredAsteriskRtpPort) {
+                                                                            this.log(`   🎯 Verifica que Asterisk esté enviando audio usando un puerto del rango 10000-20000 (ej. ${this.preferredAsteriskRtpPort})`);
                                                                         }
                                                                     }
+                                                                    
+                                                                    if (selectedCandidateInfo) {
+                                                                        this.log(`🔗 Conexión activa: ${selectedCandidateInfo.type.toUpperCase()} - ${selectedCandidateInfo.ip}:${selectedCandidateInfo.port}`);
+                                                                        if (selectedCandidateInfo.type === 'relay') {
+                                                                            this.log('   ✅ USANDO TURN (relay) - Esto debería resolver problemas de firewall');
+                                                                        } else if (selectedCandidateInfo.type === 'srflx') {
+                                                                            this.log('   ⚠️ Usando STUN (srflx) - Puede fallar si hay firewall estricto');
+                                                                        } else {
+                                                                            this.log('   ✅ Usando conexión directa (host) - Correcto para servidor local');
+                                                                        }
+                                                                    } else {
+                                                                        this.log('   ⚠️ No se pudo determinar el tipo de conexión activa');
+                                                                    }
+                                                                    
+                                                                    if (totalBytesReceived === 0 && totalPacketsReceived === 0) {
+                                                                        this.log('');
+                                                                        this.log('❌ PROBLEMA CRÍTICO: NO hay datos RTP llegando');
+                                                                        this.log('');
+                                                                        this.log('📋 ANÁLISIS DEL PROBLEMA:');
+                                                                        this.log('   1. ✅ Conexión ICE establecida (ambos están conectados)');
+                                                                        this.log('   2. ✅ Puertos RTP configurados correctamente');
+                                                                        if (localRtpPort && remoteRtpPort) {
+                                                                            this.log(`   3. ✅ Puerto Cliente: ${localRtpPort}, Puerto Asterisk: ${remoteRtpPort}`);
+                                                                        }
+                                                                        this.log('   4. ❌ NO hay tráfico RTP (0 bytes enviados/recibidos)');
+                                                                        this.log('');
+                                                                        this.log('🎯 CAUSA MÁS PROBABLE:');
+                                                                        this.log('   Asterisk NO está enviando audio al cliente');
+                                                                        this.log('');
+                                                                        this.log('🔧 SOLUCIONES (en orden de prioridad):');
+                                                                        this.log('   1. VERIFICAR EN ASTERISK (en el servidor):');
+                                                                        this.log('      asterisk -rx "rtp show"');
+                                                                        this.log('      Deberías ver una sesión RTP activa con:');
+                                                                        if (remoteRtpPort && localRtpIp && localRtpPort) {
+                                                                            this.log(`      Local: 192.168.65.190:${remoteRtpPort}`);
+                                                                            this.log(`      Remote: ${localRtpIp}:${localRtpPort}`);
+                                                                        } else {
+                                                                            this.log('      Local: 192.168.65.190:XXXX');
+                                                                            this.log('      Remote: X.X.X.X:XXXX');
+                                                                        }
+                                                                        this.log('');
+                                                                        this.log('   2. Si NO hay sesión RTP en Asterisk:');
+                                                                        this.log('      - Verificar configuración RTP en /etc/asterisk/rtp.conf');
+                                                                        this.log('      - Verificar que el canal está activo: asterisk -rx "core show channels"');
+                                                                        this.log('      - Verificar que no hay silencio en el otro extremo de la llamada');
+                                                                        this.log('');
+                                                                        this.log('   3. Si HAY sesión RTP pero no hay datos:');
+                                                                        if (remoteRtpPort) {
+                                                                            this.log(`      - Verificar firewall: sudo ufw allow ${remoteRtpPort}/udp`);
+                                                                        }
+                                                                        this.log('      - Verificar firewall: sudo ufw allow 10000:20000/udp');
+                                                                        this.log('      - Verificar que el puerto usado por Asterisk está abierto');
+                                                                        this.log('');
+                                                                        this.log('   4. Verificar configuración de codecs:');
+                                                                        this.log('      asterisk -rx "rtp show stats"');
+                                                                    } else {
+                                                                        this.log(`✅ Datos de audio confirmados: ${totalBytesReceived} bytes, ${totalPacketsReceived} paquetes`);
+                                                                        if (self.remoteAudioElement.currentTime === 0) {
+                                                                            this.log('⚠️ Hay datos RTP pero el tiempo no avanza. Puede ser un problema del codec.');
+                                                                        } else {
+                                                                            this.log('✅ Audio funcionando correctamente');
+                                                                        }
+                                                                    }
+                                                                    this.log('═══════════════════════════════════════════════════════');
                                                                 } catch (err) {
                                                                     this.log('⚠️ Error al verificar estadísticas:', err);
                                                                 }
@@ -1676,32 +2111,173 @@ class WebRTCSoftphone {
     }
     
     handleIncomingCall(invitation) {
-        this.log('Llamada entrante de:', invitation.remoteIdentity?.uri?.user);
         const caller = invitation.remoteIdentity?.uri?.user || 'Desconocido';
-        this.showNotification('Llamada entrante', `De: ${caller}`);
+        this.log('📞 Llamada entrante de:', caller);
         
+        // 1. Guardar la sesión actual
         this.currentSession = invitation;
+        this.currentNumber = caller;
         
-        setTimeout(() => {
-            invitation.accept()
-                .then(() => {
-                    this.log('Llamada aceptada');
-                    this.onCallStarted();
-                })
-                .catch((error) => {
-                    this.log('Error al aceptar llamada:', error);
-                });
-        }, 1000);
+        // 2. Actualizar UI
+        this.show(); // Asegurar que el softphone sea visible
+        this.updateCallInfo(caller, 'Llamada Entrante...');
+        this.updateStatus('in-call', 'Llamando...'); // Poner punto azul
         
+        // 3. Mostrar botones de Contestar/Rechazar
+        const normalControls = document.getElementById('normal-controls');
+        const incomingControls = document.getElementById('incoming-controls');
+        const activeControls = document.getElementById('active-controls');
+        const callControls = document.getElementById('call-controls');
+        if (normalControls) normalControls.style.display = 'none';
+        if (activeControls) activeControls.style.display = 'none';
+        if (callControls) callControls.style.display = 'none';
+        if (incomingControls) incomingControls.style.display = 'flex'; // Mostrar botones de contestar
+        
+        // 4. Notificación de navegador
+        this.showNotification('📞 Llamada Entrante', `De: ${caller}`);
+        
+        // 5. ✅ SOLUCIÓN: Reproducir Tono de Alerta (Ringtone)
+        this.log('🔔 Intentando reproducir ringtone...');
+        if (this.ringAudio) {
+            this.log('✅ ringAudio está disponible');
+            this.log('   📊 Estado del audio:', {
+                readyState: this.ringAudio.readyState,
+                networkState: this.ringAudio.networkState,
+                paused: this.ringAudio.paused,
+                src: this.ringAudio.src,
+                error: this.ringAudio.error ? {
+                    code: this.ringAudio.error.code,
+                    message: this.ringAudio.error.message
+                } : null
+            });
+            
+            // Verificar si hay errores de carga
+            if (this.ringAudio.error) {
+                this.log('❌ El archivo de audio tiene errores:', this.ringAudio.error);
+                this.log('   💡 Código de error:', this.ringAudio.error.code);
+                this.log('   💡 Mensaje:', this.ringAudio.error.message);
+                this.log('   💡 Verifica que el archivo existe y es accesible');
+            } else if (this.ringAudio.readyState >= 2) {
+                // readyState >= 2 significa que hay datos suficientes para reproducir
+                this.ringAudio.currentTime = 0; // Reiniciar desde el principio
+                this.ringAudio.play()
+                    .then(() => {
+                        this.log('✅ Ringtone reproducido exitosamente');
+                        this.log('   📊 Estado después de play:', {
+                            paused: this.ringAudio.paused,
+                            currentTime: this.ringAudio.currentTime,
+                            readyState: this.ringAudio.readyState
+                        });
+                    })
+                    .catch(e => {
+                        this.log('⚠️ No se pudo iniciar el ringtone');
+                        this.log('   Error name:', e.name);
+                        this.log('   Error message:', e.message);
+                        this.log('   💡 Nota: El error puede ser por la política de autoplay de Chrome');
+                        this.log('   💡 El usuario debe haber interactuado con la página primero');
+                        this.log('   💡 Solución: El usuario debe hacer clic en algún botón antes de recibir llamadas');
+                    });
+            } else {
+                this.log('⚠️ El archivo de audio aún no está listo (readyState:', this.ringAudio.readyState + ')');
+                this.log('   💡 Esperando a que el archivo se cargue completamente...');
+                // Esperar a que el archivo esté listo
+                const tryPlayWhenReady = () => {
+                    if (this.ringAudio && this.ringAudio.readyState >= 2) {
+                        this.ringAudio.currentTime = 0;
+                        this.ringAudio.play()
+                            .then(() => {
+                                this.log('✅ Ringtone reproducido después de esperar carga');
+                            })
+                            .catch(e => {
+                                this.log('⚠️ Error al reproducir después de carga:', e);
+                            });
+                    } else if (this.ringAudio && this.ringAudio.readyState < 4) {
+                        setTimeout(tryPlayWhenReady, 100);
+                    }
+                };
+                this.ringAudio.addEventListener('canplay', tryPlayWhenReady, { once: true });
+            }
+        } else {
+            this.log('⚠️ ringAudio no está disponible (archivo no cargado o no existe)');
+            this.log('   💡 Verifica que el archivo /assets/audio/ringtone.mp3 existe');
+            this.log('   💡 Verifica la consola al cargar la página para ver si hubo errores de carga');
+        }
+        
+        // 6. Manejar cancelación si el cliente cuelga antes de que contestemos
         invitation.stateChange.addListener((newState) => {
             const stateStr = String(newState);
-            if (stateStr === 'Established' || stateStr === '4') {
+            this.log('Estado de invitación entrante:', stateStr);
+            
+            if (stateStr === 'Terminated' || stateStr === 'Canceled') {
+                this.log('Llamada entrante cancelada por el origen');
+                this.onCallEnded(); // Restaurar interfaz
+            } else if (stateStr === 'Established') {
+                // Si se estableció (por ejemplo si contestamos en otro tab)
                 this.onCallStarted();
-                this.startCallTimer();
-            } else if (stateStr === 'Terminated' || stateStr === '5') {
-                this.onCallEnded();
             }
         });
+    }
+    
+    async answerIncomingCall() {
+        if (!this.currentSession) return;
+        this.log('✅ Usuario presionó Contestar');
+        
+        try {
+            // Reutilizamos la misma configuración robusta de ICE y Audio que usas para llamar
+            const options = {
+                sessionDescriptionHandlerOptions: {
+                    constraints: {
+                        audio: true,
+                        video: false
+                    },
+                    iceServers: this._getIceServers(),
+                    rtcConfiguration: {
+                        iceServers: this._getIceServers(),
+                        iceTransportPolicy: 'all',
+                        bundlePolicy: 'max-bundle',
+                        rtcpMuxPolicy: 'require'
+                    },
+                    // Pasar mediaStreamFactory que retorna el stream pre-adquirido
+                    mediaStreamFactory: async () => {
+                        this.log('🎤 ===== mediaStreamFactory LLAMADA PARA CONTESTAR =====');
+                        // Adquirir stream antes de contestar
+                        if (!this.preAcquiredStream || !this.preAcquiredStream.active) {
+                            this.log('Adquiriendo MediaStream para contestar...');
+                            const audioConstraints = await this._determineAudioConstraints();
+                            this.preAcquiredStream = await this._mediaStreamFactory(audioConstraints);
+                            this.lastMediaStream = this.preAcquiredStream;
+                        }
+                        if (this.preAcquiredStream && this.preAcquiredStream.active) {
+                            this.log('✅ Retornando stream pre-adquirido activo para contestar');
+                            const audioTracks = this.preAcquiredStream.getAudioTracks();
+                            this.log(`   Stream tiene ${audioTracks.length} track(s) de audio`);
+                            return this.preAcquiredStream;
+                        }
+                        this.log('⚠️ Stream pre-adquirido no disponible, adquiriendo nuevo...');
+                        return await this._mediaStreamFactory();
+                    }
+                }
+            };
+            
+            // Aceptar la llamada
+            await this.currentSession.accept(options);
+            
+            // Actualizar UI a "En llamada"
+            this.onCallStarted();
+            
+        } catch (error) {
+            this.log('❌ Error al contestar:', error);
+            this.showNotification('Error', 'No se pudo contestar la llamada', 'error');
+            this.onCallEnded();
+        }
+    }
+    
+    rejectIncomingCall() {
+        if (!this.currentSession) return;
+        
+        this.log('⛔ Usuario presionó Rechazar');
+        this.currentSession.reject();
+        this.onCallEnded();
     }
     
     // Resto de métodos auxiliares...
@@ -1717,32 +2293,77 @@ class WebRTCSoftphone {
     onCallStarted() {
         this.updateStatus('in-call', 'En llamada');
         document.getElementById('call-info').classList.add('active');
-        document.getElementById('call-controls').style.display = 'grid';
-        document.getElementById('btn-call').style.display = 'none';
-        document.getElementById('btn-hangup').style.display = 'flex';
+        
+        // Mostrar controles de llamada activa
+        document.getElementById('call-controls').style.display = 'grid'; // Mute, Hold, etc
+        document.getElementById('active-controls').style.display = 'flex'; // Botón colgar grande
+        
+        // Ocultar otros controles
+        document.getElementById('normal-controls').style.display = 'none';
+        document.getElementById('incoming-controls').style.display = 'none';
+        
         this.updateCallInfo(this.currentNumber, 'Conectado');
+        
+        // Detener ringtone si estuviera sonando
+        if (this.ringAudio) {
+            this.ringAudio.pause();
+            this.ringAudio.currentTime = 0;
+        }
+        
+        // Iniciar temporizador de llamada
+        this.startCallTimer();
     }
     
     onCallEnded() {
         this.stopCallTimer();
         this.updateStatus('connected', 'En línea');
         document.getElementById('call-info').classList.remove('active');
+        
+        // Restaurar estado inicial
         document.getElementById('call-controls').style.display = 'none';
-        document.getElementById('btn-call').style.display = 'flex';
-        document.getElementById('btn-hangup').style.display = 'none';
+        document.getElementById('active-controls').style.display = 'none';
+        document.getElementById('incoming-controls').style.display = 'none';
+        
+        // Mostrar teclado y botón de llamar
+        document.getElementById('normal-controls').style.display = 'flex';
+        
         this.currentSession = null;
         this.currentNumber = '';
         this.updateNumberDisplay();
         this._releaseLastMediaStream();
         
-        // Limpiar stream pre-adquirido después de la llamada
+        // Limpiar stream pre-adquirido y audio remoto
         this.preAcquiredStream = null;
-        
-        // Limpiar audio remoto
         if (this.remoteAudioElement) {
             this.remoteAudioElement.srcObject = null;
             this.remoteAudioElement.pause();
             this.log('🔇 Audio remoto limpiado');
+        }
+        
+        // ✅ Limpieza de Tonos
+        this.log('🔇 Deteniendo todos los tonos...');
+        if (this.ringAudio) {
+            try {
+                this.ringAudio.pause();
+                this.ringAudio.currentTime = 0;
+                this.log('✅ Ringtone detenido');
+            } catch (e) {
+                this.log('⚠️ Error al detener ringtone:', e);
+            }
+        } else {
+            this.log('ℹ️ ringAudio no está disponible');
+        }
+        
+        if (this.ringbackAudio) {
+            try {
+                this.ringbackAudio.pause();
+                this.ringbackAudio.currentTime = 0;
+                this.log('✅ Ringback tone detenido');
+            } catch (e) {
+                this.log('⚠️ Error al detener ringback tone:', e);
+            }
+        } else {
+            this.log('ℹ️ ringbackAudio no está disponible');
         }
     }
     
@@ -1784,14 +2405,19 @@ class WebRTCSoftphone {
     createPanel() {
         let panel = document.getElementById('webrtc-softphone');
         if (panel) {
-            this.panel = panel;
-            return;
+            // Si el panel ya existe (inline), configurarlo
+            panel.className = 'webrtc-softphone-panel inline';
+        } else {
+            // Si no existe, crear uno flotante
+            panel = document.createElement('div');
+            panel.className = 'webrtc-softphone-panel hidden';
+            panel.id = 'webrtc-softphone';
+            document.body.appendChild(panel);
         }
-        
-        panel = document.createElement('div');
-        panel.className = 'webrtc-softphone-panel hidden';
-        panel.id = 'webrtc-softphone';
-        
+
+        this.panel = panel;
+
+        const isInline = panel.classList.contains('inline');
         panel.innerHTML = `
             <div class="softphone-header">
                 <h3><i class="fas fa-headset"></i> <span class="header-title">Softphone</span></h3>
@@ -1799,9 +2425,9 @@ class WebRTCSoftphone {
                     <button class="softphone-btn-icon" data-action="toggleCompact" title="Modo compacto">
                         <i class="fas fa-compress-alt"></i>
                     </button>
-                    <button class="softphone-btn-icon" data-action="toggle" title="Cerrar">
+                    ${!isInline ? `<button class="softphone-btn-icon" data-action="toggle" title="Cerrar">
                         <i class="fas fa-times"></i>
-                    </button>
+                    </button>` : ''}
                 </div>
             </div>
             
@@ -1838,15 +2464,25 @@ class WebRTCSoftphone {
                     <button class="dialpad-btn" data-digit="#">#</button>
                 </div>
                 
-                <div class="action-buttons">
+                <div class="action-buttons" id="normal-controls">
                     <button class="action-btn delete-btn" data-action="deleteDigit">
                         <i class="fas fa-backspace"></i>
                     </button>
                     <button class="action-btn call-btn" id="btn-call" data-action="makeCall">
                         <i class="fas fa-phone"></i> Llamar
                     </button>
-                    <button class="action-btn hangup-btn" id="btn-hangup" data-action="hangup" style="display: none;">
-                        <i class="fas fa-phone-slash"></i> Colgar
+                </div>
+                <div class="action-buttons" id="incoming-controls" style="display: none;">
+                    <button class="action-btn" style="background: #28a745; color: white;" data-action="answerIncomingCall">
+                        <i class="fas fa-phone"></i> Contestar
+                    </button>
+                    <button class="action-btn" style="background: #dc3545; color: white;" data-action="rejectIncomingCall">
+                        <i class="fas fa-phone-slash"></i> Rechazar
+                    </button>
+                </div>
+                <div class="action-buttons" id="active-controls" style="display: none;">
+                    <button class="action-btn hangup-btn" id="btn-hangup" data-action="hangup" style="width: 100%;">
+                        <i class="fas fa-phone-slash"></i> Colgar Llamada
                     </button>
                 </div>
                 
@@ -1952,6 +2588,37 @@ class WebRTCSoftphone {
         this.updateNumberDisplay();
         this.show();
         this.makeCall();
+    }
+    
+    /**
+     * Establecer número en el dialpad sin hacer la llamada
+     * Útil para copiar números desde otras partes de la interfaz
+     * @param {string} number - Número de teléfono a establecer
+     */
+    setNumber(number) {
+        if (!number || typeof number !== 'string') {
+            this.log('⚠️ setNumber: Número inválido:', number);
+            return false;
+        }
+        
+        // Limpiar el número (remover espacios, guiones, etc.)
+        const numeroLimpio = number.trim().replace(/[\s\-\(\)]/g, '');
+        
+        if (numeroLimpio === '') {
+            this.log('⚠️ setNumber: Número vacío después de limpiar');
+            return false;
+        }
+        
+        this.currentNumber = numeroLimpio;
+        this.updateNumberDisplay();
+        
+        // Asegurar que el panel esté visible
+        if (this.panel && this.panel.classList.contains('hidden')) {
+            this.show();
+        }
+        
+        this.log('✅ Número establecido en el dialpad:', numeroLimpio);
+        return true;
     }
     
     /**

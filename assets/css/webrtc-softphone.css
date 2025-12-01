@@ -32,6 +32,27 @@
     display: none;
 }
 
+.webrtc-softphone-panel.inline {
+    position: static;
+    transform: none;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    box-shadow: none;
+    border-radius: 8px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+.webrtc-softphone-panel.inline .softphone-header {
+    background: #002341;
+    cursor: default;
+}
+
+.webrtc-softphone-panel.inline .softphone-body {
+    padding: 15px;
+}
+
 .webrtc-softphone-panel.dragging {
     cursor: move;
     opacity: 0.8;
@@ -148,9 +169,10 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    color: white;
-    font-size: 14px;
+    color: rgb(0, 0, 0);
+    font-size: 14px bold;
     font-weight: 500;
+    
 }
 
 .status-dot {

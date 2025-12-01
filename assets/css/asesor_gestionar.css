@@ -96,6 +96,10 @@
     border-radius: 12px;
     padding: 20px;
     border: 1px solid #e0e0e0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .seccion-info-cliente h3 {
@@ -122,6 +126,9 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .cliente-header {
@@ -145,8 +152,16 @@
 
 .cliente-dato {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+}
+
+.cliente-dato .dato-label {
+    flex-shrink: 0;
 }
 
 .dato-label {
@@ -166,8 +181,12 @@
 
 .telefonos-cliente {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 5px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .telefonos-cliente input {
@@ -524,46 +543,6 @@
 .canal-item label i.fa-mail-bulk { color: #dc3545; }
 .canal-item label i.fa-comments { color: #6c757d; }
 
-/* Sección Staqueue */
-.staqueue-section {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-    border: 1px solid #e0e0e0;
-}
-
-.staqueue-banner {
-    background: #007bff;
-    color: white;
-    padding: 15px;
-    border-radius: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-}
-
-.staqueue-texto strong {
-    display: block;
-    font-size: 16px;
-    margin-bottom: 5px;
-}
-
-.staqueue-texto p {
-    margin: 0;
-    font-size: 14px;
-    opacity: 0.9;
-}
-
-.staqueue-link {
-    color: white;
-    text-decoration: underline;
-    font-weight: 500;
-}
-
-.staqueue-link:hover {
-    color: #e3f2fd;
-}
 
 .btn-agregar-info {
     background: #28a745;
@@ -1120,4 +1099,133 @@
 .error-historial p {
     margin: 0;
     font-size: 14px;
+}
+
+/* ========================================
+   ESTILOS PARA SELECTOR DE TELÉFONO Y INTEGRACIÓN CON SOFTPHONE
+   ======================================== */
+
+.telefono-selector-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 8px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.telefono-selector-container > div {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.telefono-selector-container label {
+    flex-shrink: 0;
+    min-width: 80px;
+    max-width: 80px;
+    font-weight: 500;
+    color: #666;
+    font-size: 13px;
+}
+
+.telefono-selector-container select,
+.telefono-selector-container input {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.telefono-selector-container > div:last-child {
+    position: relative;
+}
+
+.telefono-selector-container > div:last-child > div {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.telefono-softphone-input {
+    position: relative;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    transition: all 0.3s ease;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.telefono-softphone-input:hover {
+    background: #e7f3ff !important;
+    border-color: #0056b3 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+}
+
+.telefono-softphone-input:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(0, 123, 255, 0.3);
+}
+
+.telefono-softphone-input:focus {
+    outline: none;
+    border-color: #0056b3 !important;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+/* Asegurar que el icono dentro del input no cause overflow */
+.telefono-selector-container > div:last-child > div i {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #007bff;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Ajustes responsivos */
+@media (max-width: 768px) {
+    .telefono-selector-container > div {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .telefono-selector-container label {
+        min-width: auto;
+        max-width: none;
+        margin-bottom: 5px;
+    }
+    
+    .telefono-selector-container select,
+    .telefono-selector-container input {
+        width: 100%;
+    }
+}
+
+/* Mensaje temporal de feedback */
+#mensaje-temporal-telefono {
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }

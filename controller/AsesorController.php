@@ -514,8 +514,8 @@ class AsesorController {
         try {
             $conn = getDBConnection();
             
-            // Obtener datos del cliente (incluir todos los celulares cel1 a cel6)
-            $sql_cliente = "SELECT c.id, c.cc, c.nombre, c.cel1, c.cel2, c.cel3, c.cel4, c.cel5, c.cel6, c.base_id
+            // Obtener datos del cliente (incluir todos los celulares cel1 a cel6 y email)
+            $sql_cliente = "SELECT c.id, c.cc, c.nombre, c.cel1, c.cel2, c.cel3, c.cel4, c.cel5, c.cel6, c.email, c.base_id
                             FROM clientes c 
                             WHERE c.id = ?";
             $stmt_cliente = $conn->prepare($sql_cliente);
@@ -578,7 +578,7 @@ class AsesorController {
                 ];
             }
             
-            // Formatear datos del cliente para la vista (incluir cel1 a cel6)
+            // Formatear datos del cliente para la vista (incluir cel1 a cel6 y email)
             $datos_cliente = [
                 'id' => $cliente['id'],
                 'nombre' => $cliente['nombre'] ?? 'N/A',
@@ -589,7 +589,8 @@ class AsesorController {
                 'cel3' => $cliente['cel3'] ?? null,
                 'cel4' => $cliente['cel4'] ?? null,
                 'cel5' => $cliente['cel5'] ?? null,
-                'cel6' => $cliente['cel6'] ?? null
+                'cel6' => $cliente['cel6'] ?? null,
+                'email' => $cliente['email'] ?? null
             ];
             
             return [
@@ -881,12 +882,12 @@ class AsesorController {
             $params = [];
             $necesita_update = false;
             
-            // Email: La columna email no existe en la tabla clientes, se ignora
-            // if (isset($datos['email']) && $datos['email'] !== null && $datos['email'] !== '') {
-            //     $updates[] = "`EMAIL CONTRATANTE` = ?";
-            //     $params[] = $datos['email'];
-            //     $necesita_update = true;
-            // }
+            // Email: Actualizar columna email si se proporcionó
+            if (isset($datos['email']) && $datos['email'] !== null && $datos['email'] !== '') {
+                $updates[] = "`email` = ?";
+                $params[] = trim($datos['email']);
+                $necesita_update = true;
+            }
             
             // Dirección: No existe en la tabla clientes, se ignora
             // La columna DIRECCION no existe en la tabla clientes
@@ -905,36 +906,46 @@ class AsesorController {
             }
             
             // Actualizar teléfonos si se proporcionaron
+            // Usar columnas cel1, cel2, cel3, cel4, cel5, cel6
             if (isset($datos['telefonos']) && is_array($datos['telefonos']) && count($datos['telefonos']) > 0) {
-                // Obtener teléfonos actuales
+                // Obtener teléfonos actuales del cliente
                 $telefonos_actuales = [
-                    $cliente['TEL 1'] ?? '',
-                    $cliente['TEL 2'] ?? '',
-                    $cliente['TEL 3'] ?? '',
-                    $cliente['TEL 4'] ?? ''
+                    'cel1' => $cliente['cel1'] ?? null,
+                    'cel2' => $cliente['cel2'] ?? null,
+                    'cel3' => $cliente['cel3'] ?? null,
+                    'cel4' => $cliente['cel4'] ?? null,
+                    'cel5' => $cliente['cel5'] ?? null,
+                    'cel6' => $cliente['cel6'] ?? null
                 ];
                 
-                // Encontrar la primera posición vacía o usar la última
-                $posicion_vacia = -1;
-                for ($i = 0; $i < 4; $i++) {
-                    if (empty($telefonos_actuales[$i])) {
-                        $posicion_vacia = $i;
-                        break;
+                // Encontrar las primeras posiciones vacías
+                $columnas_disponibles = ['cel1', 'cel2', 'cel3', 'cel4', 'cel5', 'cel6'];
+                $posiciones_vacias = [];
+                
+                foreach ($columnas_disponibles as $columna) {
+                    $valor = $telefonos_actuales[$columna];
+                    if (empty($valor) || $valor === null || trim($valor) === '' || $valor === '0' || strtolower($valor) === 'null') {
+                        $posiciones_vacias[] = $columna;
                     }
                 }
                 
-                if ($posicion_vacia == -1) {
-                    $posicion_vacia = 3; // Usar TEL4 si todos están ocupados
+                // Si no hay posiciones vacías, usar las últimas disponibles (cel4, cel5, cel6)
+                if (empty($posiciones_vacias)) {
+                    $posiciones_vacias = ['cel4', 'cel5', 'cel6'];
                 }
                 
-                // Actualizar teléfonos nuevos
-                foreach ($datos['telefonos'] as $index => $telefono) {
-                    $columna = "TEL " . ($posicion_vacia + 1);
-                    if ($posicion_vacia < 4) {
-                        $sql_tel = "UPDATE clientes SET `$columna` = ? WHERE id = ?";
-                        $stmt_tel = $conn->prepare($sql_tel);
-                        $stmt_tel->execute([$telefono['numero'], $cliente_id]);
-                        $posicion_vacia++;
+                // Actualizar teléfonos nuevos en las posiciones vacías disponibles
+                $telefonos_agregados = 0;
+                foreach ($datos['telefonos'] as $telefono) {
+                    if (isset($telefono['numero']) && !empty(trim($telefono['numero']))) {
+                        // Verificar que no excedamos las posiciones disponibles
+                        if ($telefonos_agregados < count($posiciones_vacias)) {
+                            $columna = $posiciones_vacias[$telefonos_agregados];
+                            $sql_tel = "UPDATE clientes SET `$columna` = ? WHERE id = ?";
+                            $stmt_tel = $conn->prepare($sql_tel);
+                            $stmt_tel->execute([trim($telefono['numero']), $cliente_id]);
+                            $telefonos_agregados++;
+                        }
                     }
                 }
             }

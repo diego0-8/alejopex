@@ -60,12 +60,6 @@ $usuario_inicial = substr($usuario_nombre, 0, 1);
                 <li id="navbar-tiempo-sesion" onclick="toggleTiempoModal()" style="cursor: pointer;">
                     <i class="fas fa-clock"></i> Tiempo de Sesión
                 </li>
-                <!-- Botón del Softphone WebRTC (solo si tiene extensión) -->
-                <?php if (isset($_SESSION['usuario_extension']) && !empty($_SESSION['usuario_extension'])): ?>
-                <li class="webrtc-toggle-btn" onclick="toggleSoftphone()" style="cursor: pointer;">
-                    <i class="fas fa-headset"></i> Teléfono
-                </li>
-                <?php endif; ?>
             <?php else: ?>
                 <!-- NAVBAR GUEST (No autenticado) -->
                 <li onclick="window.location.href='index.php?action=login'">
