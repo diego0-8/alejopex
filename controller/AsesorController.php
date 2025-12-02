@@ -4,6 +4,7 @@ require_once 'models/Usuario.php';
 require_once 'models/Cliente.php';
 require_once 'models/Contrato.php';
 require_once 'models/Asignacion.php';
+require_once 'models/Gestion.php';
 
 class AsesorController {
     private $usuario_model;
@@ -968,8 +969,6 @@ class AsesorController {
      */
     public function guardarGestion($asesor_cedula, $cliente_id, $datos) {
         try {
-            require_once 'models/Gestion.php';
-            
             // Verificar acceso del asesor al cliente
             $sql_verificar = "SELECT * FROM clientes WHERE id = ?";
             $conn = getDBConnection();
@@ -1155,8 +1154,6 @@ class AsesorController {
      */
     public function obtenerHistorialGestiones($cliente_id, $asesor_cedula) {
         try {
-            require_once 'models/Gestion.php';
-            
             // Verificar acceso del asesor al cliente
             $conn = getDBConnection();
             $sql_verificar = "SELECT c.id, c.cc, c.nombre, c.base_id

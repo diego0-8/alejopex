@@ -604,28 +604,6 @@
                         <small>Estado inicial del usuario</small>
                     </div>
                     
-                    <!-- Campos de Extensión WebRTC (solo para asesores) -->
-                    <div id="campos-extension" style="display: none; border-top: 2px solid #667eea; padding-top: 15px; margin-top: 15px;">
-                        <h4 style="color: #667eea; margin-bottom: 15px;">
-                            <i class="fas fa-headset"></i> Configuración de Softphone WebRTC
-                        </h4>
-                        <div class="form-group">
-                            <label for="extension">Extensión SIP</label>
-                            <input type="text" id="extension" name="extension" placeholder="Ej: 1001" pattern="[0-9]{3,5}" maxlength="5">
-                            <small>Número de extensión para el softphone (3-5 dígitos)</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="sip_password">Password SIP</label>
-                            <input type="text" id="sip_password" name="sip_password" placeholder="Ej: 12" minlength="2" maxlength="50">
-                            <small>Contraseña para autenticación SIP (mínimo 2 caracteres)</small>
-                        </div>
-                        <div style="background: #e7f3ff; padding: 12px; border-radius: 8px; border-left: 4px solid #2196F3; margin-top: 10px;">
-                            <p style="margin: 0; font-size: 13px; color: #0c5460;">
-                                <strong><i class="fas fa-info-circle"></i> Nota:</strong> 
-                                Si el asesor tiene extensión asignada, verá el botón del softphone en su panel de gestión.
-                            </p>
-                        </div>
-                    </div>
                     
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" onclick="closeModal('crear-usuario')">Cancelar</button>
@@ -1614,53 +1592,8 @@
             }
         }
         
-        // ============================================
-        // WEBRTC SOFTPHONE: Mostrar campos de extensión solo para asesores
-        // ============================================
         
-        // Función para configurar campos de extensión
-        function configurarCamposExtension() {
-            const rolSelect = document.getElementById('rol');
-            const camposExtension = document.getElementById('campos-extension');
-            const extensionInput = document.getElementById('extension');
-            const sipPasswordInput = document.getElementById('sip_password');
-            
-            if (rolSelect && camposExtension) {
-                // Remover eventos anteriores clonando el elemento
-                const nuevoRolSelect = rolSelect.cloneNode(true);
-                rolSelect.parentNode.replaceChild(nuevoRolSelect, rolSelect);
-                
-                // Evento al cambiar el rol
-                nuevoRolSelect.addEventListener('change', function() {
-                    if (this.value === 'asesor') {
-                        camposExtension.style.display = 'block';
-                        // Scroll suave hacia los campos
-                        setTimeout(() => {
-                            camposExtension.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        }, 100);
-                    } else {
-                        camposExtension.style.display = 'none';
-                        // Limpiar valores
-                        const extInput = document.getElementById('extension');
-                        const sipInput = document.getElementById('sip_password');
-                        if (extInput) extInput.value = '';
-                        if (sipInput) sipInput.value = '';
-                    }
-                });
-                
-                // Verificar valor inicial
-                if (nuevoRolSelect.value === 'asesor') {
-                    camposExtension.style.display = 'block';
-                }
-            }
-        }
-        
-        // Ejecutar al cargar el DOM
-        document.addEventListener('DOMContentLoaded', function() {
-            configurarCamposExtension();
-        });
-        
-        // Sobrescribir openModal para reconfigurar al abrir
+        // Sobrescribir openModal si es necesario
         const openModalOriginal = window.openModal;
         window.openModal = function(modalId) {
             if (openModalOriginal) {
@@ -1668,11 +1601,6 @@
             } else {
                 const modal = document.getElementById(modalId);
                 if (modal) modal.style.display = 'block';
-            }
-            
-            // Si es el modal de crear usuario, configurar campos de extensión
-            if (modalId === 'crear-usuario') {
-                setTimeout(configurarCamposExtension, 100);
             }
         };
     </script>

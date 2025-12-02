@@ -10,7 +10,7 @@ if (file_exists(__DIR__ . '/config_optimizacion.php')) {
 }
 
 // Configuración de sesión única para este proyecto
-session_name('APEX_copia_SID');
+session_name('APEX3_SID');
 session_start();
 
 // Configuración de zona horaria

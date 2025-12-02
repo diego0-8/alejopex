@@ -62,7 +62,7 @@ class Usuario {
      * @return array|false
      */
     public function obtenerPorCedula($cedula) {
-        $query = "SELECT cedula, nombre_completo, usuario, estado, rol, fecha_creacion, fecha_actualizacion 
+        $query = "SELECT cedula, nombre_completo, usuario, estado, rol, fecha_creacion, fecha_actualizacion, extension, sip_password 
                   FROM " . $this->table_name . " 
                   WHERE cedula = :cedula";
 

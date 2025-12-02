@@ -893,6 +893,13 @@ switch ($action) {
         $authController->requerirRol('asesor');
         $usuario_actual = $authController->obtenerUsuarioActual();
         
+        // Verificar que la sesión tenga los datos necesarios
+        if (empty($_SESSION['usuario_id']) && empty($_SESSION['usuario_cedula'])) {
+            error_log("ERROR asesor_gestionar: Sesión sin usuario_id ni usuario_cedula");
+            header('Location: index.php?action=login');
+            exit();
+        }
+        
         // Obtener ID del cliente desde la URL
         $cliente_id = $_GET['cliente_id'] ?? null;
         
@@ -909,6 +916,15 @@ switch ($action) {
         $cliente_data = $asesorController->obtenerDatosCliente($cliente_id, $usuario_actual['cedula']);
         $contrato_data = $asesorController->obtenerDatosContrato($cliente_id);
         $historial_data = $asesorController->obtenerHistorialCliente($cliente_id);
+        
+        // DEBUG: Verificar datos de sesión para softphone (solo si debug está activado)
+        if (defined('ASTERISK_DEBUG_MODE') && ASTERISK_DEBUG_MODE) {
+            error_log("DEBUG index.php asesor_gestionar - Variables de sesión:");
+            error_log("  - usuario_id: " . ($_SESSION['usuario_id'] ?? 'NO DEFINIDA'));
+            error_log("  - usuario_cedula: " . ($_SESSION['usuario_cedula'] ?? 'NO DEFINIDA'));
+            error_log("  - usuario_rol: " . ($_SESSION['usuario_rol'] ?? 'NO DEFINIDO'));
+            error_log("  - usuario_nombre: " . ($_SESSION['usuario_nombre'] ?? 'NO DEFINIDO'));
+        }
         
         // Incluir la vista de gestión de cliente
         include 'views/asesor_gestionar.php';
@@ -1095,10 +1111,7 @@ switch ($action) {
                 'usuario' => $_POST['usuario'] ?? '',
                 'contrasena' => $_POST['contrasena'] ?? '',
                 'estado' => $_POST['estado'] ?? 'activo',
-                'rol' => $_POST['rol'] ?? '',
-                // WebRTC Softphone: Campos de extensión
-                'extension' => $_POST['extension'] ?? '',
-                'sip_password' => $_POST['sip_password'] ?? ''
+                'rol' => $_POST['rol'] ?? ''
             ];
             
             // Crear el usuario usando el controlador

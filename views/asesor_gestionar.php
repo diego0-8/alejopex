@@ -12,7 +12,6 @@
     <link rel="stylesheet" href="assets/css/admin-dashboard.css">
     <link rel="stylesheet" href="assets/css/coordinador-dashboard.css">
     <link rel="stylesheet" href="assets/css/asesor_gestionar.css">
-    <link rel="stylesheet" href="assets/css/webrtc-softphone.css">
 </head>
 <body data-user-id="<?php echo $_SESSION['usuario_id'] ?? ''; ?>">
 
@@ -147,10 +146,73 @@
 
             <!-- COLUMNA 3: SOFTPHONE, OBSERVACIONES Y CANALES -->
             <div class="columna-tres">
-                <!-- Softphone WebRTC - Siempre visible -->
+                <!-- Softphone WebRTC - Solo visible para asesores con extensión -->
+                <?php
+                // Obtener datos del usuario desde la base de datos para verificar extensión
+                require_once 'models/Usuario.php';
+                $usuario_model = new Usuario();
+                
+                // Intentar obtener el usuario de múltiples formas
+                $usuario_data = false;
+                $identificador_usado = '';
+                
+                // Método 1: Por cédula desde sesión
+                if (!empty($_SESSION['usuario_cedula'])) {
+                    $identificador_usado = $_SESSION['usuario_cedula'];
+                    $usuario_data = $usuario_model->obtenerPorCedula($identificador_usado);
+                    if ($usuario_data && defined('ASTERISK_DEBUG_MODE') && ASTERISK_DEBUG_MODE) {
+                        error_log("DEBUG Softphone - Usuario encontrado por usuario_cedula: " . $identificador_usado);
+                    }
+                }
+                
+                // Método 2: Por usuario_id (que también es la cédula según AuthController)
+                if (!$usuario_data && !empty($_SESSION['usuario_id'])) {
+                    $identificador_usado = $_SESSION['usuario_id'];
+                    $usuario_data = $usuario_model->obtenerPorCedula($identificador_usado);
+                    if ($usuario_data && defined('ASTERISK_DEBUG_MODE') && ASTERISK_DEBUG_MODE) {
+                        error_log("DEBUG Softphone - Usuario encontrado por usuario_id: " . $identificador_usado);
+                    }
+                }
+                
+                // DEBUG: Verificar datos obtenidos
+                if (defined('ASTERISK_DEBUG_MODE') && ASTERISK_DEBUG_MODE) {
+                    error_log("DEBUG Softphone - Variables de sesión:");
+                    error_log("  - usuario_cedula: " . ($_SESSION['usuario_cedula'] ?? 'NO DEFINIDA'));
+                    error_log("  - usuario_id: " . ($_SESSION['usuario_id'] ?? 'NO DEFINIDA'));
+                    error_log("  - usuario_rol: " . ($_SESSION['usuario_rol'] ?? 'NO DEFINIDO'));
+                    
+                    if ($usuario_data) {
+                        error_log("DEBUG Softphone - Usuario encontrado:");
+                        error_log("  - Cédula: " . ($usuario_data['cedula'] ?? 'NO DEFINIDA'));
+                        error_log("  - Extension: " . ($usuario_data['extension'] ?? 'NO DEFINIDA'));
+                        error_log("  - SIP Password: " . (!empty($usuario_data['sip_password']) ? 'DEFINIDA (' . strlen($usuario_data['sip_password']) . ' caracteres)' : 'VACIA'));
+                    } else {
+                        error_log("DEBUG Softphone - ERROR: Usuario NO encontrado");
+                        error_log("  - Intentó con: " . ($identificador_usado ?: 'NINGUNO'));
+                    }
+                }
+                
+                // Verificar que el usuario sea asesor Y tenga extensión y clave SIP asignadas
+                $mostrar_softphone = (
+                    isset($_SESSION['usuario_rol']) && 
+                    $_SESSION['usuario_rol'] === 'asesor' &&
+                    $usuario_data &&
+                    !empty($usuario_data['extension'] ?? '') &&
+                    !empty($usuario_data['sip_password'] ?? '')
+                );
+                
+                // DEBUG: Verificar resultado de mostrar_softphone
+                if (defined('ASTERISK_DEBUG_MODE') && ASTERISK_DEBUG_MODE) {
+                    error_log("DEBUG Softphone - Mostrar softphone: " . ($mostrar_softphone ? 'SI' : 'NO'));
+                    error_log("DEBUG Softphone - Rol: " . ($_SESSION['usuario_rol'] ?? 'NO DEFINIDO'));
+                }
+                
+                if ($mostrar_softphone):
+                ?>
                 <div class="seccion-softphone-wrapper" style="margin-bottom: 20px;">
                     <div id="webrtc-softphone" class="webrtc-softphone-panel inline"></div>
                 </div>
+                <?php endif; ?>
 
                 <!-- Observaciones y Comentarios -->
                 <div class="seccion-observaciones">
@@ -707,154 +769,178 @@
     </script>
 
     <!-- WebRTC Softphone Integration -->
-    <script src="assets/js/sip.min.js"></script>
-    <script src="assets/js/webrtc-softphone.js"></script>
     <?php
-    // Incluir configuración WebRTC
-    require_once 'config/asterisk.php';
-    $webrtc_config = getWebRTCConfig();
-
-    // Verificar si el usuario tiene extensión asignada
-    if (isset($_SESSION['usuario_extension']) && !empty($_SESSION['usuario_extension'])):
-    ?>
-    <script>
-    // Configuración del softphone
-    const webrtcConfig = {
-        wss_server: '<?php echo $webrtc_config['wss_server']; ?>',
-        sip_domain: '<?php echo $webrtc_config['sip_domain']; ?>',
-        extension: '<?php echo $_SESSION['usuario_extension'] ?? ''; ?>',
-        password: '<?php echo $_SESSION['usuario_sip_password'] ?? ''; ?>',
-        display_name: '<?php echo $_SESSION['usuario_nombre'] ?? 'Asesor'; ?>',
-        stun_server: '<?php echo $webrtc_config['stun_server']; ?>',
-        preferredRtpPort: <?php echo (int) ($webrtc_config['preferred_rtp_port'] ?? 10000); ?>,
-        iceServers: <?php 
-            $iceServers = $webrtc_config['iceServers'] ?? [];
-            if (!is_array($iceServers) || empty($iceServers)) {
-                $iceServers = [];
-            }
-            echo json_encode($iceServers, JSON_UNESCAPED_SLASHES);
-        ?>,
-        debug_mode: <?php echo $webrtc_config['debug_mode'] ? 'true' : 'false'; ?>
-    };
-
-    // Esperar a que TANTO SIP.js COMO webrtc-softphone.js estén cargados
-    function inicializarSoftphoneConVerificacion() {
-        let intentos = 0;
-        const maxIntentos = 100;
+    if ($mostrar_softphone):
+        // Incluir configuración WebRTC
+        require_once 'config/asterisk.php';
+        $webrtc_config = getWebRTCConfig();
         
-        const intervalo = setInterval(function() {
-            intentos++;
-            
-            // Verificar que TODO esté listo
-            const sipjsListo = typeof SIP !== 'undefined' && 
-                              typeof SIP.UserAgent !== 'undefined' && 
-                              typeof SIP.UserAgent.makeURI === 'function';
-            
-            const softphoneListo = typeof WebRTCSoftphone !== 'undefined';
-            
-            if (sipjsListo && softphoneListo) {
-                clearInterval(intervalo);
-                console.log('✅ Todos los componentes listos, inicializando softphone...');
-                
-                try {
-                    window.webrtcSoftphone = new WebRTCSoftphone(webrtcConfig);
-                    console.log('✅ Softphone WebRTC inicializado correctamente');
-                    console.log('📞 Extensión:', webrtcConfig.extension);
-                } catch (error) {
-                    console.error('❌ Error al inicializar softphone:', error);
-                    console.error('Stack:', error.stack);
-                    alert('Error al inicializar el softphone: ' + error.message);
-                }
-                
-            } else {
-                if (intentos % 10 === 0) {
-                    console.log(`⏳ Esperando componentes... (${intentos}/${maxIntentos})`);
-                    console.log('  SIP.js listo:', sipjsListo);
-                    console.log('  WebRTCSoftphone listo:', softphoneListo);
-                }
-                
-                if (intentos >= maxIntentos) {
-                    clearInterval(intervalo);
-                    console.error('❌ Timeout esperando componentes del softphone');
-                    alert('El softphone no se pudo inicializar. Por favor, recarga la página.');
-                }
-            }
-        }, 100);
-    }
-
-    // Iniciar cuando el DOM esté listo
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', inicializarSoftphoneConVerificacion);
-    } else {
-        inicializarSoftphoneConVerificacion();
-    }
-    
-    // Script de verificación y ajuste del diseño
-    document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(function() {
-            const panel = document.getElementById('webrtc-softphone');
-            if (panel) {
-                // Asegurar que tenga la clase inline
-                if (!panel.classList.contains('inline')) {
-                    panel.classList.add('inline');
-                }
-                
-                // Asegurar que esté visible
-                panel.style.display = 'block';
-                panel.style.visibility = 'visible';
-                panel.style.opacity = '1';
-                
-                // Verificar que todos los elementos estén presentes
-                const dialpad = panel.querySelector('.dialpad');
-                const actionButtons = panel.querySelector('.action-buttons');
-                const numberDisplay = panel.querySelector('.number-display');
-                
-                if (dialpad && actionButtons && numberDisplay) {
-                    console.log('✅ Softphone inline configurado correctamente');
-                    console.log('   - Dialpad:', dialpad.children.length, 'botones');
-                    console.log('   - Botones de acción:', actionButtons.children.length, 'botones');
-                    console.log('   - Display de número:', numberDisplay ? 'OK' : 'FALTA');
-                } else {
-                    console.warn('⚠️ Algunos elementos del softphone no se encontraron');
-                }
-            }
-        }, 1000);
-    });
-
-    // Función global para toggle
-    function toggleSoftphone() {
-        if (typeof window.webrtcSoftphone !== 'undefined' && 
-            window.webrtcSoftphone !== null) {
-            
-            if (typeof window.webrtcSoftphone.toggle === 'function') {
-                window.webrtcSoftphone.toggle();
-            } else if (typeof window.webrtcSoftphone.show === 'function') {
-                window.webrtcSoftphone.show();
-            }
-        } else {
-            alert('El softphone aún no está listo. Por favor, espera un momento.');
-        }
-    }
-    
-    // Función global para llamar desde click-to-call
-    function llamarDesdeWebRTC(numero) {
-        if (typeof window.webrtcSoftphone !== 'undefined' && 
-            window.webrtcSoftphone !== null && 
-            window.webrtcSoftphone.callNumber) {
-            window.webrtcSoftphone.callNumber(numero);
-        } else {
-            alert('Softphone no disponible. Por favor, espera a que se inicialice.');
-        }
-    }
-    </script>
-    <?php else: ?>
+        // Usar datos de sesión directamente (ya están cargados en AuthController)
+        $extension = $_SESSION['usuario_extension'] ?? '';
+        $sip_password = $_SESSION['usuario_sip_password'] ?? '';
+    ?>
+    <script src="assets/js/sip.min.js"></script>
+    <script src="assets/js/softphone-web.js"></script>
     <script>
-    console.warn('⚠️ Usuario sin extensión WebRTC asignada');
-    </script>
-    <?php endif; ?>
+        // Configuración del softphone
+        const webrtcConfig = {
+            wss_server: '<?php echo $webrtc_config['wss_server']; ?>',
+            sip_domain: '<?php echo $webrtc_config['sip_domain']; ?>',
+            extension: '<?php echo htmlspecialchars($extension, ENT_QUOTES, 'UTF-8'); ?>',
+            password: '<?php echo htmlspecialchars($sip_password, ENT_QUOTES, 'UTF-8'); ?>',
+            display_name: '<?php echo htmlspecialchars($_SESSION['usuario_nombre'] ?? 'Asesor', ENT_QUOTES, 'UTF-8'); ?>',
+            preferredRtpPort: <?php echo (int) ($webrtc_config['preferred_rtp_port'] ?? 10000); ?>,
+            iceServers: <?php 
+                $iceServers = $webrtc_config['iceServers'] ?? [];
+                if (!is_array($iceServers) || empty($iceServers)) {
+                    $iceServers = [];
+                }
+                echo json_encode($iceServers, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            ?>,
+            debug_mode: <?php echo $webrtc_config['debug_mode'] ? 'true' : 'false'; ?>
+        };
+        
+        // DEBUG: Mostrar configuración en consola ANTES de inicializar
+        console.log('🔍 [DEBUG] Configuración del softphone (ANTES de validar):');
+        console.log('  - Extension:', webrtcConfig.extension || 'VACIA');
+        console.log('  - Password:', webrtcConfig.password ? 'DEFINIDA (' + webrtcConfig.password.length + ' caracteres)' : 'VACIA');
+        console.log('  - WSS Server:', webrtcConfig.wss_server || 'VACIO');
+        console.log('  - SIP Domain:', webrtcConfig.sip_domain || 'VACIO');
+        console.log('  - Debug Mode:', webrtcConfig.debug_mode);
+        
+        // Verificar que los valores críticos no estén vacíos
+        if (!webrtcConfig.extension || webrtcConfig.extension.trim() === '') {
+            console.error('❌ [ERROR CRÍTICO] La extensión está vacía. Verifica la base de datos.');
+        }
+        if (!webrtcConfig.password || webrtcConfig.password.trim() === '') {
+            console.error('❌ [ERROR CRÍTICO] La contraseña SIP está vacía. Verifica la base de datos.');
+        }
+        if (!webrtcConfig.wss_server || webrtcConfig.wss_server.trim() === '') {
+            console.error('❌ [ERROR CRÍTICO] El servidor WSS está vacío. Verifica config/asterisk.php');
+        }
+        if (!webrtcConfig.sip_domain || webrtcConfig.sip_domain.trim() === '') {
+            console.error('❌ [ERROR CRÍTICO] El dominio SIP está vacío. Verifica config/asterisk.php');
+        }
 
+        // Esperar a que TANTO SIP.js COMO softphone-web.js estén cargados
+        function inicializarSoftphoneConVerificacion() {
+            let intentos = 0;
+            const maxIntentos = 100;
+            
+            const intervalo = setInterval(function() {
+                intentos++;
+                
+                // Verificar que TODO esté listo
+                const sipjsListo = typeof SIP !== 'undefined' && 
+                                  typeof SIP.UserAgent !== 'undefined';
+                
+                const softphoneListo = typeof WebRTCSoftphone !== 'undefined';
+                
+                if (sipjsListo && softphoneListo) {
+                    clearInterval(intervalo);
+                    console.log('✅ Todos los componentes listos, inicializando softphone...');
+                    
+                        try {
+                            // Verificar que el contenedor existe
+                            const container = document.getElementById('webrtc-softphone');
+                            if (!container) {
+                                console.warn('⚠️ [WebRTC Softphone] Contenedor del softphone no encontrado. El usuario puede no tener extensión asignada.');
+                                return;
+                            }
+                            
+                            // Verificar configuración antes de inicializar
+                            console.log('🔄 [WebRTC Softphone] Inicializando softphone...');
+                            console.log('📝 [WebRTC Softphone] Verificando configuración:', {
+                                extension: webrtcConfig.extension || 'VACIA',
+                                password: webrtcConfig.password ? 'DEFINIDA' : 'VACIA',
+                                wss_server: webrtcConfig.wss_server,
+                                sip_domain: webrtcConfig.sip_domain,
+                                debug_mode: webrtcConfig.debug_mode
+                            });
+                            
+                            // Validar que la extensión y password no estén vacías
+                            if (!webrtcConfig.extension || webrtcConfig.extension.trim() === '') {
+                                console.error('❌ [WebRTC Softphone] Error: Extension está vacía');
+                                alert('Error: La extensión SIP no está configurada. Contacta al administrador.');
+                                return;
+                            }
+                            
+                            if (!webrtcConfig.password || webrtcConfig.password.trim() === '') {
+                                console.error('❌ [WebRTC Softphone] Error: Password está vacía');
+                                alert('Error: La contraseña SIP no está configurada. Contacta al administrador.');
+                                return;
+                            }
+                            
+                            window.webrtcSoftphone = new WebRTCSoftphone(webrtcConfig);
+                            console.log('✅ [WebRTC Softphone] Softphone WebRTC inicializado correctamente');
+                            console.log('📞 [WebRTC Softphone] Extensión:', webrtcConfig.extension);
+                            
+                            // Función para verificar estado (útil para debugging)
+                            window.verificarEstadoSoftphone = function() {
+                                if (window.webrtcSoftphone) {
+                                    console.log('📊 [WebRTC Softphone] Estado actual:', {
+                                        extension: window.webrtcSoftphone.config.extension,
+                                        sip_domain: window.webrtcSoftphone.config.sip_domain,
+                                        wss_server: window.webrtcSoftphone.config.wss_server,
+                                        isRegistered: window.webrtcSoftphone.isRegistered,
+                                        isConnected: window.webrtcSoftphone.isConnected,
+                                        status: window.webrtcSoftphone.status,
+                                        transportState: window.webrtcSoftphone.userAgent?.transport?.state,
+                                        registrationState: window.webrtcSoftphone.userAgent?.registration?.state
+                                    });
+                                } else {
+                                    console.warn('⚠️ [WebRTC Softphone] El softphone no está inicializado');
+                                }
+                            };
+                            
+                            console.log('💡 [WebRTC Softphone] Tip: Ejecuta verificarEstadoSoftphone() en la consola para ver el estado actual');
+                            
+                        } catch (error) {
+                            console.error('❌ [WebRTC Softphone] Error al inicializar softphone:', error);
+                            console.error('❌ [WebRTC Softphone] Stack:', error.stack);
+                            if (webrtcConfig.debug_mode) {
+                                alert('Error al inicializar el softphone: ' + error.message);
+                            }
+                        }
+                    
+                } else {
+                    if (intentos % 10 === 0) {
+                        console.log(`⏳ Esperando componentes... (${intentos}/${maxIntentos})`);
+                        console.log('  SIP.js listo:', sipjsListo);
+                        console.log('  WebRTCSoftphone listo:', softphoneListo);
+                    }
+                    
+                    if (intentos >= maxIntentos) {
+                        clearInterval(intervalo);
+                        console.error('❌ Timeout esperando componentes del softphone');
+                        if (webrtcConfig.debug_mode) {
+                            alert('El softphone no se pudo inicializar. Por favor, recarga la página.');
+                        }
+                    }
+                }
+            }, 100);
+        }
+
+        // Iniciar cuando el DOM esté listo
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', inicializarSoftphoneConVerificacion);
+        } else {
+            inicializarSoftphoneConVerificacion();
+        }
+        
+        // Función global para llamar desde click-to-call
+        function llamarDesdeWebRTC(numero) {
+            if (typeof window.webrtcSoftphone !== 'undefined' && 
+                window.webrtcSoftphone !== null && 
+                window.webrtcSoftphone.callNumber) {
+                window.webrtcSoftphone.callNumber(numero);
+            } else {
+                console.warn('Softphone no disponible. Por favor, espera a que se inicialice.');
+            }
+        }
+    </script>
     <style>
-    /* Estilos para el softphone inline en la columna 3 */
+    /* Estilos básicos para el softphone inline */
     .seccion-softphone-wrapper {
         background: white;
         border-radius: 8px;
@@ -866,82 +952,51 @@
         max-width: 100%;
     }
     
-    /* Panel inline del softphone - MÁS ESTRECHO Y MÁS ALTO */
     .webrtc-softphone-panel.inline {
         position: relative !important;
         display: block !important;
         visibility: visible !important;
         opacity: 1 !important;
-        width: 38% !important;
+        width: 100% !important;
         max-width: 100% !important;
         margin: 0 auto !important;
         padding: 0 !important;
         box-shadow: none !important;
         border: none !important;
         background: transparent !important;
-        transform: none !important;
-        top: auto !important;
-        left: auto !important;
-        right: auto !important;
-        bottom: auto !important;
     }
     
     .webrtc-softphone-panel.inline.hidden {
         display: none !important;
     }
     
-    /* Header del softphone - COMPACTO */
     .webrtc-softphone-panel.inline .softphone-header {
         background: #007bff;
         color: white;
-        padding: 8px 12px;
+        padding: 10px 15px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-radius: 0;
-        margin-top: 20px;
-        width: 370px;
+        border-radius: 8px 8px 0 0;
     }
     
     .webrtc-softphone-panel.inline .softphone-header h3 {
         margin: 0;
         color: white;
-        font-size: 14px;
+        font-size: 16px;
         font-weight: 600;
         display: flex;
         align-items: center;
         gap: 8px;
     }
     
-    .webrtc-softphone-panel.inline .softphone-header-actions {
-        display: flex;
-        gap: 6px;
-    }
-    
-    .webrtc-softphone-panel.inline .softphone-btn-icon {
-        background: rgba(255,255,255,0.2);
-        border: none;
-        color: white;
-        padding: 4px 8px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-    }
-    
-    .webrtc-softphone-panel.inline .softphone-btn-icon:hover {
-        background: rgba(255,255,255,0.3);
-    }
-    
-    /* Body del softphone - MÁS ESTRECHO Y MÁS ALTO */
     .webrtc-softphone-panel.inline .softphone-body {
-        padding: 12px 8px;
+        padding: 15px;
         background: white;
-        width: 385px;
     }
     
-    /* Status indicator - COMPACTO */
     .webrtc-softphone-panel.inline .softphone-status {
-        margin-bottom: 10px;
+        margin-bottom: 15px;
         text-align: center;
     }
     
@@ -949,42 +1004,66 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
-        font-size: 12px;
+        gap: 8px;
+        font-size: 13px;
     }
     
-    /* Number display - MÁS ESTRECHO Y MÁS ALTO */
-    .webrtc-softphone-panel.inline .number-input-container {
-        margin-bottom: 10px;
+    .webrtc-softphone-panel.inline .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    
+    .webrtc-softphone-panel.inline .status-dot.connected {
+        background: #28a745;
+    }
+    
+    .webrtc-softphone-panel.inline .status-dot.disconnected {
+        background: #dc3545;
+    }
+    
+    .webrtc-softphone-panel.inline .status-dot.connecting {
+        background: #ffc107;
+        animation: pulse 1.5s infinite;
+    }
+    
+    .webrtc-softphone-panel.inline .status-dot.in-call {
+        background: #007bff;
+        animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
     }
     
     .webrtc-softphone-panel.inline .number-display {
         background: #f8f9fa;
         border: 2px solid #dee2e6;
-        border-radius: 4px;
-        padding: 10px 6px;
+        border-radius: 6px;
+        padding: 12px;
         text-align: center;
-        font-size: 15px;
+        font-size: 18px;
         font-weight: 600;
         color: #333;
-        min-height: 22px;
+        margin-bottom: 15px;
+        min-height: 30px;
     }
     
-    /* Dialpad - MÁS ESTRECHO Y MÁS ALTO */
     .webrtc-softphone-panel.inline .dialpad {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 4px;
-        margin-bottom: 10px;
-        max-width: 100%;
+        gap: 8px;
+        margin-bottom: 15px;
     }
     
     .webrtc-softphone-panel.inline .dialpad-btn {
         background: white;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        padding: 10px 2px;
-        font-size: 15px;
+        border: 2px solid #dee2e6;
+        border-radius: 6px;
+        padding: 15px 5px;
+        font-size: 18px;
         font-weight: 600;
         color: #333;
         cursor: pointer;
@@ -993,7 +1072,7 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        min-height: 45px;
+        min-height: 50px;
     }
     
     .webrtc-softphone-panel.inline .dialpad-btn:hover {
@@ -1002,32 +1081,30 @@
     }
     
     .webrtc-softphone-panel.inline .dialpad-btn-letter {
-        font-size: 8px;
+        font-size: 10px;
         color: #666;
-        margin-top: 1px;
+        margin-top: 2px;
     }
     
-    /* Action buttons - MÁS ESTRECHO Y MÁS ALTO */
     .webrtc-softphone-panel.inline .action-buttons {
         display: flex;
-        gap: 5px;
-        margin-bottom: 10px;
+        gap: 8px;
+        margin-bottom: 15px;
     }
     
     .webrtc-softphone-panel.inline .action-btn {
         flex: 1;
-        padding: 10px 6px;
+        padding: 12px;
         border: none;
-        border-radius: 4px;
-        font-size: 11px;
+        border-radius: 6px;
+        font-size: 14px;
         font-weight: 600;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 4px;
+        gap: 6px;
         transition: all 0.2s;
-        min-height: 38px;
     }
     
     .webrtc-softphone-panel.inline .delete-btn {
@@ -1057,12 +1134,11 @@
         background: #c82333;
     }
     
-    /* Call info - MÁS ESTRECHO Y MÁS ALTO */
     .webrtc-softphone-panel.inline .call-info {
         background: #f8f9fa;
-        border-radius: 4px;
-        padding: 10px 6px;
-        margin-bottom: 10px;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 15px;
         text-align: center;
         display: none;
     }
@@ -1071,47 +1147,26 @@
         display: block;
     }
     
-    .webrtc-softphone-panel.inline .call-info-number {
-        font-size: 14px;
-        font-weight: 600;
-        color: #333;
-        margin-bottom: 4px;
-    }
-    
-    .webrtc-softphone-panel.inline .call-info-duration {
-        font-size: 13px;
-        color: #007bff;
-        font-weight: 600;
-        margin-bottom: 4px;
-    }
-    
-    .webrtc-softphone-panel.inline .call-info-status {
-        font-size: 11px;
-        color: #666;
-    }
-    
-    /* Call controls - MÁS ESTRECHO Y MÁS ALTO */
     .webrtc-softphone-panel.inline .call-controls {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 4px;
+        gap: 8px;
     }
     
     .webrtc-softphone-panel.inline .control-btn {
         background: white;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        padding: 8px 4px;
-        font-size: 10px;
+        border: 2px solid #dee2e6;
+        border-radius: 6px;
+        padding: 10px;
+        font-size: 12px;
         font-weight: 600;
         color: #333;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 3px;
+        gap: 6px;
         transition: all 0.2s;
-        min-height: 36px;
     }
     
     .webrtc-softphone-panel.inline .control-btn:hover {
@@ -1124,48 +1179,8 @@
         color: white;
         border-color: #007bff;
     }
-    
-    /* Status dot - COMPACTO */
-    .webrtc-softphone-panel.inline .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        display: inline-block;
-    }
-    
-    .webrtc-softphone-panel.inline .status-dot.connected {
-        background: #28a745;
-    }
-    
-    .webrtc-softphone-panel.inline .status-dot.disconnected {
-        background: #dc3545;
-    }
-    
-    .webrtc-softphone-panel.inline .status-dot.connecting {
-        background: #ffc107;
-        animation: pulse 1.5s infinite;
-    }
-    
-    .webrtc-softphone-panel.inline .status-dot.in-call {
-        background: #007bff;
-        animation: pulse 1.5s infinite;
-    }
-    
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-    
-    /* Asegurar que no se oculte */
-    .webrtc-softphone-panel.inline {
-        z-index: 1 !important;
-    }
-    
-    /* Reducir márgenes generales del wrapper */
-    .seccion-softphone-wrapper {
-        margin-bottom: 15px;
-    }
     </style>
+    <?php endif; ?>
 
 </body>
 </html>

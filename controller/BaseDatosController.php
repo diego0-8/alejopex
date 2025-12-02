@@ -269,7 +269,6 @@ class BaseDatosController {
      */
     private function registrarHistorialActividad($tipo_actividad, $descripcion, $archivo_tarea = '', $base_id = null, $estado = 'exitoso', $detalles = '') {
         try {
-            require_once 'models/Historial.php';
             $historial_model = new Historial();
             
             $historial_data = [
