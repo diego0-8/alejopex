@@ -142,9 +142,19 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Observaciones y Comentarios -->
+                <div class="seccion-observaciones">
+                    <h3><i class="fas fa-comment-dots"></i> Observaciones y Comentarios</h3>
+                    <p class="instrucciones">Documente las interacciones y seguimientos pertinentes</p>
+                    <div class="observaciones-detalladas">
+                        <label>Observaciones Detalladas:</label>
+                        <textarea id="observaciones-texto" rows="10" placeholder="Describe detalladamente el resultado de la gestión, acuerdos, próximos pasos, objeciones del cliente, etc."></textarea>
+                    </div>
+                </div>
             </div>
 
-            <!-- COLUMNA 3: SOFTPHONE, OBSERVACIONES Y CANALES -->
+            <!-- COLUMNA 3: SOFTPHONE Y CANALES -->
             <div class="columna-tres">
                 <!-- Softphone WebRTC - Solo visible para asesores con extensión -->
                 <?php
@@ -213,16 +223,6 @@
                     <div id="webrtc-softphone" class="webrtc-softphone-panel inline"></div>
                 </div>
                 <?php endif; ?>
-
-                <!-- Observaciones y Comentarios -->
-                <div class="seccion-observaciones">
-                    <h3><i class="fas fa-comment-dots"></i> Observaciones y Comentarios</h3>
-                    <p class="instrucciones">Documente las interacciones y seguimientos pertinentes</p>
-                    <div class="observaciones-detalladas">
-                        <label>Observaciones Detalladas:</label>
-                        <textarea id="observaciones-texto" rows="10" placeholder="Describe detalladamente el resultado de la gestión, acuerdos, próximos pasos, objeciones del cliente, etc."></textarea>
-                    </div>
-                </div>
 
                 <!-- Canales de Comunicación -->
                 <div class="seccion-canales">
@@ -1178,6 +1178,153 @@
         background: #007bff;
         color: white;
         border-color: #007bff;
+    }
+    
+    .webrtc-softphone-panel.inline .conference-btn {
+        background: linear-gradient(135deg, #17a2b8, #138496);
+        color: white;
+        border-color: #17a2b8;
+    }
+    
+    .webrtc-softphone-panel.inline .conference-btn:hover {
+        background: linear-gradient(135deg, #138496, #117a8b);
+        border-color: #138496;
+    }
+    
+    .webrtc-softphone-panel.inline .transfer-btn {
+        background: linear-gradient(135deg, #ffc107, #e0a800);
+        color: #333;
+        border-color: #ffc107;
+    }
+    
+    .webrtc-softphone-panel.inline .transfer-btn:hover {
+        background: linear-gradient(135deg, #e0a800, #d39e00);
+        border-color: #e0a800;
+    }
+    
+    /* Estilos para modales */
+    .softphone-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 100000;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .softphone-modal .modal-content {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        max-width: 400px;
+        width: 90%;
+        max-height: 90vh;
+        overflow: auto;
+    }
+    
+    .softphone-modal .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .softphone-modal .modal-header h4 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .softphone-modal .modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: #666;
+        cursor: pointer;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: all 0.2s;
+    }
+    
+    .softphone-modal .modal-close:hover {
+        background: #f8f9fa;
+        color: #333;
+    }
+    
+    .softphone-modal .modal-body {
+        padding: 20px;
+    }
+    
+    .softphone-modal .modal-body p {
+        margin: 0 0 15px 0;
+        color: #666;
+        font-size: 14px;
+    }
+    
+    .softphone-modal .modal-input {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #dee2e6;
+        border-radius: 6px;
+        font-size: 16px;
+        margin-bottom: 20px;
+        box-sizing: border-box;
+    }
+    
+    .softphone-modal .modal-input:focus {
+        outline: none;
+        border-color: #007bff;
+    }
+    
+    .softphone-modal .modal-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+    }
+    
+    .softphone-modal .modal-btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+    }
+    
+    .softphone-modal .modal-btn-primary {
+        background: linear-gradient(135deg, #28a745, #20c997);
+        color: white;
+    }
+    
+    .softphone-modal .modal-btn-primary:hover {
+        background: linear-gradient(135deg, #218838, #1ea080);
+    }
+    
+    .softphone-modal .modal-btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+    
+    .softphone-modal .modal-btn-secondary:hover {
+        background: #5a6268;
     }
     </style>
     <?php endif; ?>

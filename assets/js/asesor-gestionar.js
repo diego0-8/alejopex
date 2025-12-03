@@ -418,9 +418,9 @@ function configurarTelefonos(datosCliente) {
     const campoSoftphone = document.getElementById('telefono-softphone');
     
     if (select && campoSoftphone) {
-        // Función para copiar número al softphone
+        // Función para copiar número al softphone e iniciar llamada automáticamente
         const copiarAlSoftphone = function(numero) {
-            console.log('Asesor_gestionar.js: Copiando número al softphone:', numero);
+            console.log('Asesor_gestionar.js: Copiando número al softphone e iniciando llamada:', numero);
             
             // Verificar que el softphone esté disponible
             if (typeof window.webrtcSoftphone === 'undefined' || window.webrtcSoftphone === null) {
@@ -429,18 +429,35 @@ function configurarTelefonos(datosCliente) {
                 return false;
             }
             
-            // Verificar que el softphone tenga el método para establecer el número
-            if (typeof window.webrtcSoftphone.setNumber === 'function') {
-                window.webrtcSoftphone.setNumber(numero);
-                mostrarMensajeTemporal('Número copiado al softphone. Presiona el botón de llamar.', 'success');
+            // Usar callNumber() que establece el número e inicia la llamada automáticamente
+            if (typeof window.webrtcSoftphone.callNumber === 'function') {
+                window.webrtcSoftphone.callNumber(numero);
+                mostrarMensajeTemporal('Llamada iniciada automáticamente.', 'success');
                 return true;
-            } else if (typeof window.webrtcSoftphone.currentNumber !== 'undefined') {
-                // Método alternativo: establecer directamente el número y actualizar el display
+            } 
+            // Fallback: si callNumber no existe, usar setNumber y luego makeCall
+            else if (typeof window.webrtcSoftphone.setNumber === 'function' && typeof window.webrtcSoftphone.makeCall === 'function') {
+                window.webrtcSoftphone.setNumber(numero);
+                setTimeout(() => {
+                    window.webrtcSoftphone.makeCall();
+                }, 100);
+                mostrarMensajeTemporal('Llamada iniciada automáticamente.', 'success');
+                return true;
+            } 
+            // Fallback alternativo: establecer directamente el número y actualizar el display
+            else if (typeof window.webrtcSoftphone.currentNumber !== 'undefined') {
                 window.webrtcSoftphone.currentNumber = numero;
                 if (typeof window.webrtcSoftphone.updateNumberDisplay === 'function') {
                     window.webrtcSoftphone.updateNumberDisplay();
                 }
-                mostrarMensajeTemporal('Número copiado al softphone. Presiona el botón de llamar.', 'success');
+                if (typeof window.webrtcSoftphone.makeCall === 'function') {
+                    setTimeout(() => {
+                        window.webrtcSoftphone.makeCall();
+                    }, 100);
+                    mostrarMensajeTemporal('Llamada iniciada automáticamente.', 'success');
+                } else {
+                    mostrarMensajeTemporal('Número copiado al softphone. Presiona el botón de llamar.', 'success');
+                }
                 return true;
             } else {
                 console.error('Asesor_gestionar.js: No se pudo copiar el número al softphone');

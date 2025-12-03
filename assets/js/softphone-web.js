@@ -18,11 +18,14 @@ class WebRTCSoftphone {
         this.isRegistered = false;
         this.status = 'disconnected'; // disconnected, connecting, connected, in-call
         this.incomingCallInvitation = null; // Llamada entrante pendiente
-        this.incomingCallAudio = null; // Audio para sonido de llamada
+        this.incomingCallAudio = null; // Audio para sonido de llamada entrante (ringtone.mp3)
+        this.ringbackAudio = null; // Audio para sonido de llamada saliente (ringback.mp3)
         this.lastMediaStream = null; // Stream de audio actual
         this.remoteAudioElement = null; // Elemento de audio para reproducir audio remoto
         this.mediaStreamFactory = this._mediaStreamFactory.bind(this); // Factory para MediaStreams (igual que APEX2)
         this.audioDevices = []; // Dispositivos de audio disponibles
+        this.conferenceCalls = []; // Array de llamadas en conferencia
+        this.isInConference = false; // Indica si hay una conferencia activa
         this.preferredAudioDeviceId = null; // ID del dispositivo de audio preferido
         
         // Verificar que SIP.js esté disponible
@@ -115,11 +118,6 @@ class WebRTCSoftphone {
                     <i class="fas fa-phone"></i>
                     Softphone WebRTC
                 </h3>
-                <div class="softphone-header-actions">
-                    <button class="softphone-btn-icon" onclick="window.webrtcSoftphone?.toggle()" title="Minimizar/Maximizar">
-                        <i class="fas fa-window-minimize"></i>
-                    </button>
-                </div>
             </div>
             <div class="softphone-body">
                 <!-- Estado de conexión -->
@@ -184,12 +182,67 @@ class WebRTCSoftphone {
                         <i class="fas fa-volume-up"></i>
                         <span>Speaker</span>
                     </button>
+                    <button class="control-btn conference-btn" id="btn-conference" onclick="window.webrtcSoftphone?.showConferenceDialog()" title="Agregar a conferencia">
+                        <i class="fas fa-users"></i>
+                        <span>Conferencia</span>
+                    </button>
+                    <button class="control-btn transfer-btn" id="btn-transfer" onclick="window.webrtcSoftphone?.showTransferDialog()" title="Transferir llamada">
+                        <i class="fas fa-exchange-alt"></i>
+                        <span>Transferir</span>
+                    </button>
+                </div>
+                
+                <!-- Modal para conferencia -->
+                <div class="softphone-modal" id="conference-modal" style="display: none;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h4><i class="fas fa-users"></i> Agregar a Conferencia</h4>
+                            <button class="modal-close" onclick="window.webrtcSoftphone?.hideConferenceDialog()">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Ingrese la extensión que desea agregar a la conferencia:</p>
+                            <input type="text" id="conference-extension" class="modal-input" placeholder="Ej: 1003" maxlength="10">
+                            <div class="modal-actions">
+                                <button class="modal-btn modal-btn-primary" onclick="window.webrtcSoftphone?.startConference()">
+                                    <i class="fas fa-phone"></i> Agregar
+                                </button>
+                                <button class="modal-btn modal-btn-secondary" onclick="window.webrtcSoftphone?.hideConferenceDialog()">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Modal para transferencia -->
+                <div class="softphone-modal" id="transfer-modal" style="display: none;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h4><i class="fas fa-exchange-alt"></i> Transferir Llamada</h4>
+                            <button class="modal-close" onclick="window.webrtcSoftphone?.hideTransferDialog()">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Ingrese la extensión a la que desea transferir la llamada:</p>
+                            <input type="text" id="transfer-extension" class="modal-input" placeholder="Ej: 1003" maxlength="10">
+                            <div class="modal-actions">
+                                <button class="modal-btn modal-btn-primary" onclick="window.webrtcSoftphone?.transferCall()">
+                                    <i class="fas fa-exchange-alt"></i> Transferir
+                                </button>
+                                <button class="modal-btn modal-btn-secondary" onclick="window.webrtcSoftphone?.hideTransferDialog()">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
         
         // Configurar eventos del dialpad
         this.setupDialpadEvents();
+        
+        // Configurar eventos de teclado para marcar con el teclado físico
+        this.setupKeyboardEvents();
         
         // Asegurar que tenga la clase inline
         container.classList.add('inline');
@@ -209,6 +262,81 @@ class WebRTCSoftphone {
                 this.addDigit(number);
             }
         });
+    }
+    
+    /**
+     * Configurar eventos de teclado para marcar con el teclado físico
+     */
+    setupKeyboardEvents() {
+        // Solo capturar teclas cuando no hay un input activo (para no interferir con modales)
+        document.addEventListener('keydown', (e) => {
+            // Ignorar si hay un input, textarea o modal activo
+            const activeElement = document.activeElement;
+            const isInputActive = activeElement && (
+                activeElement.tagName === 'INPUT' ||
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.isContentEditable ||
+                activeElement.closest('.softphone-modal')
+            );
+            
+            // Ignorar si hay una llamada en curso
+            if (this.currentCall) {
+                return;
+            }
+            
+            // Si hay un input activo, no procesar las teclas
+            if (isInputActive) {
+                return;
+            }
+            
+            // Capturar números del teclado (0-9, *, #)
+            const key = e.key;
+            
+            // Números del 0 al 9
+            if (key >= '0' && key <= '9') {
+                e.preventDefault();
+                this.addDigit(key);
+                if (this.config.debug_mode) {
+                    console.log('⌨️ [WebRTC Softphone] Dígito agregado desde teclado:', key);
+                }
+            }
+            // Asterisco
+            else if (key === '*' || key === '8' && e.shiftKey) {
+                e.preventDefault();
+                this.addDigit('*');
+                if (this.config.debug_mode) {
+                    console.log('⌨️ [WebRTC Softphone] Dígito agregado desde teclado: *');
+                }
+            }
+            // Numeral
+            else if (key === '#' || key === '3' && e.shiftKey) {
+                e.preventDefault();
+                this.addDigit('#');
+                if (this.config.debug_mode) {
+                    console.log('⌨️ [WebRTC Softphone] Dígito agregado desde teclado: #');
+                }
+            }
+            // Backspace para borrar
+            else if (key === 'Backspace' || key === 'Delete') {
+                e.preventDefault();
+                this.deleteLastDigit();
+                if (this.config.debug_mode) {
+                    console.log('⌨️ [WebRTC Softphone] Último dígito borrado desde teclado');
+                }
+            }
+            // Enter para llamar
+            else if (key === 'Enter' && this.currentNumber && this.currentNumber.trim() !== '') {
+                e.preventDefault();
+                this.makeCall();
+                if (this.config.debug_mode) {
+                    console.log('⌨️ [WebRTC Softphone] Llamada iniciada desde teclado (Enter)');
+                }
+            }
+        });
+        
+        if (this.config.debug_mode) {
+            console.log('⌨️ [WebRTC Softphone] Eventos de teclado configurados');
+        }
     }
     
     /**
@@ -974,19 +1102,22 @@ class WebRTCSoftphone {
     }
     
     /**
-     * Reproducir sonido de llamada entrante
+     * Reproducir sonido de llamada entrante (ringtone.mp3)
      */
     playIncomingCallSound() {
         try {
-            // Crear elemento de audio para el tono de llamada si no existe
+            // Detener ringback si está sonando
+            this.stopRingbackSound();
+            
+            // Crear elemento de audio para el tono de llamada entrante si no existe
             if (!this.incomingCallAudio) {
-                this.incomingCallAudio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjGH0fPTgjMGHm7A7+OZUA4PVKzn77FbGAg+ltryy3kpBSV+zfLZiTYIGGW57+OeTQ8MTqTj8LZjHAY4kdfyzHksBSR3x/DdkEAKFF606euoVRQKRp/g8r5sIQYxh9Hz04IzBh5uwO/jmVAOD1Ss5++xWxgIPpba8st5KQUlfs3y2Yk2CBhlue/jnk0PDE6k4/C2YxwGOJHX8sx5LAUkd8fw3ZBAC');
+                this.incomingCallAudio = new Audio('assets/audio/ringtone.mp3');
                 this.incomingCallAudio.loop = true;
                 this.incomingCallAudio.volume = 0.7;
                 this.incomingCallAudio.preload = 'auto';
                 
                 if (this.config.debug_mode) {
-                    console.log('🔊 [WebRTC Softphone] Elemento de audio creado para llamada entrante');
+                    console.log('🔊 [WebRTC Softphone] Elemento de audio creado para llamada entrante (ringtone.mp3)');
                 }
             }
             
@@ -999,24 +1130,78 @@ class WebRTCSoftphone {
                 playPromise
                     .then(() => {
                         if (this.config.debug_mode) {
-                            console.log('✅ [WebRTC Softphone] Sonido de llamada entrante reproduciéndose');
+                            console.log('✅ [WebRTC Softphone] Sonido de llamada entrante (ringtone.mp3) reproduciéndose');
                         }
                     })
                     .catch(error => {
-                        console.warn('⚠️ [WebRTC Softphone] No se pudo reproducir el sonido de llamada:', error);
+                        console.warn('⚠️ [WebRTC Softphone] No se pudo reproducir el sonido de llamada entrante:', error);
                         // Intentar forzar reproducción con un click simulado
                         if (document.body) {
                             document.body.click();
                             setTimeout(() => {
                                 this.incomingCallAudio.play().catch(err => {
-                                    console.warn('⚠️ [WebRTC Softphone] Error persistente al reproducir sonido:', err);
+                                    console.warn('⚠️ [WebRTC Softphone] Error persistente al reproducir sonido entrante:', err);
                                 });
                             }, 100);
                         }
                     });
             }
         } catch (error) {
-            console.error('❌ [WebRTC Softphone] Error al reproducir sonido de llamada:', error);
+            console.error('❌ [WebRTC Softphone] Error al reproducir sonido de llamada entrante:', error);
+        }
+    }
+    
+    /**
+     * Reproducir sonido de ringback para llamadas salientes (ringback.mp3)
+     */
+    playRingbackSound() {
+        try {
+            // Detener sonido de llamada entrante si está sonando
+            this.stopIncomingCallSound();
+            
+            // Crear elemento de audio para el ringback si no existe
+            if (!this.ringbackAudio) {
+                this.ringbackAudio = new Audio('assets/audio/ringback.mp3');
+                this.ringbackAudio.loop = true;
+                this.ringbackAudio.volume = 0.6;
+                this.ringbackAudio.preload = 'auto';
+                
+                if (this.config.debug_mode) {
+                    console.log('🔊 [WebRTC Softphone] Elemento de audio creado para ringback (ringback.mp3)');
+                }
+            }
+            
+            // Reiniciar el audio desde el principio
+            this.ringbackAudio.currentTime = 0;
+            
+            // Intentar reproducir
+            const playPromise = this.ringbackAudio.play();
+            if (playPromise !== undefined) {
+                playPromise
+                    .then(() => {
+                        if (this.config.debug_mode) {
+                            console.log('✅ [WebRTC Softphone] Ringback (ringback.mp3) reproduciéndose');
+                        }
+                    })
+                    .catch(error => {
+                        console.warn('⚠️ [WebRTC Softphone] No se pudo reproducir el ringback:', error);
+                    });
+            }
+        } catch (error) {
+            console.error('❌ [WebRTC Softphone] Error al reproducir ringback:', error);
+        }
+    }
+    
+    /**
+     * Detener sonido de ringback
+     */
+    stopRingbackSound() {
+        if (this.ringbackAudio) {
+            this.ringbackAudio.pause();
+            this.ringbackAudio.currentTime = 0;
+            if (this.config.debug_mode) {
+                console.log('🔇 [WebRTC Softphone] Ringback detenido');
+            }
         }
     }
     
@@ -1027,6 +1212,9 @@ class WebRTCSoftphone {
         if (this.incomingCallAudio) {
             this.incomingCallAudio.pause();
             this.incomingCallAudio.currentTime = 0;
+            if (this.config.debug_mode) {
+                console.log('🔇 [WebRTC Softphone] Sonido de llamada entrante detenido');
+            }
         }
     }
     
@@ -1297,6 +1485,9 @@ class WebRTCSoftphone {
                             console.log('✅ [WebRTC Softphone] Llamada aceptada');
                         }
                         this.updateStatus('in-call', 'En llamada');
+                        // Asegurar que la UI muestre los controles de llamada
+                        this.showCallInfo(number);
+                        this.updateCallStatus('En llamada');
                         this.startCallTimer();
                     },
                     onReject: (response) => {
@@ -1360,14 +1551,29 @@ class WebRTCSoftphone {
                 
                 if (stateStr === 'Established' || stateStr === '4' || newState === 'Established') {
                     this.updateStatus('in-call', 'En llamada');
+                    // Detener ringback cuando la llamada se establece
+                    this.stopRingbackSound();
+                    // Asegurar que la UI muestre los controles de llamada
+                    this.showCallInfo(this.currentNumber || number);
+                    this.updateCallStatus('En llamada');
                     this.startCallTimer();
                     this.setupAudioSessionForCall(inviter);
                 } else if (stateStr === 'Terminated' || stateStr === '5' || newState === 'Terminated') {
+                    // Detener ringback cuando la llamada termina
+                    this.stopRingbackSound();
                     this.endCall();
                 } else if (stateStr === 'Progress' || stateStr === '2' || newState === 'Progress') {
                     this.updateCallStatus('Sonando...');
+                    // Reproducir ringback cuando la llamada está sonando
+                    this.playRingbackSound();
                 } else if (stateStr === 'Establishing' || stateStr === '3' || newState === 'Establishing') {
                     this.updateCallStatus('Llamando...');
+                    // Reproducir ringback cuando la llamada está estableciéndose
+                    this.playRingbackSound();
+                } else if (stateStr === 'Ringing' || stateStr === '1' || newState === 'Ringing') {
+                    this.updateCallStatus('Sonando...');
+                    // Reproducir ringback cuando la llamada está sonando
+                    this.playRingbackSound();
                 }
             });
             
@@ -1493,8 +1699,9 @@ class WebRTCSoftphone {
             console.log('📴 [WebRTC Softphone] Finalizando llamada...');
         }
         
-        // Detener sonido de llamada si está sonando
+        // Detener todos los sonidos
         this.stopIncomingCallSound();
+        this.stopRingbackSound();
         
         // Ocultar notificación de llamada entrante si existe
         this.hideIncomingCallNotification();
@@ -1519,6 +1726,10 @@ class WebRTCSoftphone {
         this.currentCall = null;
         this.incomingCallInvitation = null;
         this.currentNumber = '';
+        
+        // Limpiar conferencia
+        this.conferenceCalls = [];
+        this.isInConference = false;
         
         // Restaurar UI
         this.updateStatus('connected', 'En línea');
@@ -1646,9 +1857,11 @@ class WebRTCSoftphone {
         const callControls = document.getElementById('call-controls');
         const btnCall = document.getElementById('btn-call');
         const btnHangup = document.getElementById('btn-hangup');
+        const numberDisplay = document.getElementById('number-display');
         
         if (callInfo) {
             callInfo.style.display = 'none';
+            callInfo.classList.remove('active');
         }
         
         if (callControls) {
@@ -1661,6 +1874,11 @@ class WebRTCSoftphone {
         
         if (btnHangup) {
             btnHangup.style.display = 'none';
+        }
+        
+        // Restaurar el display del número
+        if (numberDisplay) {
+            numberDisplay.style.display = 'block';
         }
     }
     
@@ -1942,6 +2160,278 @@ class WebRTCSoftphone {
         }
         
         return iceServers;
+    }
+    
+    /**
+     * Mostrar diálogo de conferencia
+     */
+    showConferenceDialog() {
+        if (!this.currentCall) {
+            this.showError('No hay llamada activa');
+            return;
+        }
+        
+        const modal = document.getElementById('conference-modal');
+        const input = document.getElementById('conference-extension');
+        if (modal && input) {
+            modal.style.display = 'flex';
+            input.value = '';
+            input.focus();
+            
+            // Permitir Enter para confirmar
+            input.onkeypress = (e) => {
+                if (e.key === 'Enter') {
+                    this.startConference();
+                }
+            };
+        }
+    }
+    
+    /**
+     * Ocultar diálogo de conferencia
+     */
+    hideConferenceDialog() {
+        const modal = document.getElementById('conference-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    /**
+     * Iniciar conferencia agregando una tercera persona
+     */
+    async startConference() {
+        const input = document.getElementById('conference-extension');
+        if (!input) {
+            return;
+        }
+        
+        const extension = input.value.trim();
+        if (!extension) {
+            this.showError('Por favor ingrese una extensión');
+            return;
+        }
+        
+        if (!this.currentCall) {
+            this.showError('No hay llamada activa');
+            this.hideConferenceDialog();
+            return;
+        }
+        
+        if (this.config.debug_mode) {
+            console.log('📞 [WebRTC Softphone] Iniciando conferencia con extensión:', extension);
+        }
+        
+        try {
+            // Crear URI de destino
+            const targetUriString = `sip:${extension}@${this.config.sip_domain}`;
+            let targetUri = SIP.UserAgent.makeURI(targetUriString);
+            if (!targetUri) {
+                throw new Error('No se pudo crear URI de destino');
+            }
+            
+            // Parchear URI
+            targetUri = this._patchUriClone(targetUri);
+            
+            // Crear nueva llamada para la conferencia
+            const inviterOptions = {
+                requestDelegate: {
+                    onAccept: (response) => {
+                        if (this.config.debug_mode) {
+                            console.log('✅ [WebRTC Softphone] Conferencia aceptada por:', extension);
+                        }
+                        this.isInConference = true;
+                        this.conferenceCalls.push(this.currentCall);
+                        this.showNotification(`Conferencia iniciada con ${extension}`, 'success');
+                    },
+                    onReject: (response) => {
+                        console.error('❌ [WebRTC Softphone] Conferencia rechazada:', response);
+                        this.showError(`La extensión ${extension} rechazó la conferencia`);
+                    }
+                },
+                sessionDescriptionHandlerOptions: {
+                    constraints: {
+                        audio: true,
+                        video: false
+                    },
+                    iceServers: this._getIceServers(),
+                    rtcConfiguration: {
+                        iceServers: this._getIceServers(),
+                        iceTransportPolicy: 'all',
+                        bundlePolicy: 'max-bundle',
+                        rtcpMuxPolicy: 'require'
+                    },
+                    mediaStreamFactory: this.mediaStreamFactory
+                }
+            };
+            
+            const conferenceInviter = new SIP.Inviter(this.userAgent, targetUri, inviterOptions);
+            
+            // Configurar eventos de la llamada de conferencia
+            conferenceInviter.stateChange.addListener((newState) => {
+                const stateStr = String(newState);
+                if (this.config.debug_mode) {
+                    console.log('📞 [WebRTC Softphone] Estado de conferencia:', stateStr);
+                }
+                
+                if (stateStr === 'Established') {
+                    this.conferenceCalls.push(conferenceInviter);
+                    this.isInConference = true;
+                    this.hideConferenceDialog();
+                    this.showNotification(`Conferencia iniciada con ${extension}`, 'success');
+                    
+                    // Configurar audio para la nueva llamada
+                    setTimeout(() => {
+                        this.setupAudioSessionForCall(conferenceInviter);
+                    }, 300);
+                } else if (stateStr === 'Terminated') {
+                    // Remover de la lista de conferencia
+                    this.conferenceCalls = this.conferenceCalls.filter(call => call !== conferenceInviter);
+                    if (this.conferenceCalls.length === 0) {
+                        this.isInConference = false;
+                    }
+                }
+            });
+            
+            // Enviar INVITE
+            await conferenceInviter.invite();
+            
+            if (this.config.debug_mode) {
+                console.log('📞 [WebRTC Softphone] INVITE de conferencia enviado a:', extension);
+            }
+            
+        } catch (error) {
+            console.error('❌ [WebRTC Softphone] Error al iniciar conferencia:', error);
+            this.showError('Error al iniciar conferencia: ' + error.message);
+        }
+    }
+    
+    /**
+     * Mostrar diálogo de transferencia
+     */
+    showTransferDialog() {
+        if (!this.currentCall) {
+            this.showError('No hay llamada activa');
+            return;
+        }
+        
+        const modal = document.getElementById('transfer-modal');
+        const input = document.getElementById('transfer-extension');
+        if (modal && input) {
+            modal.style.display = 'flex';
+            input.value = '';
+            input.focus();
+            
+            // Permitir Enter para confirmar
+            input.onkeypress = (e) => {
+                if (e.key === 'Enter') {
+                    this.transferCall();
+                }
+            };
+        }
+    }
+    
+    /**
+     * Ocultar diálogo de transferencia
+     */
+    hideTransferDialog() {
+        const modal = document.getElementById('transfer-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    /**
+     * Transferir llamada a otra extensión
+     */
+    async transferCall() {
+        const input = document.getElementById('transfer-extension');
+        if (!input) {
+            return;
+        }
+        
+        const extension = input.value.trim();
+        if (!extension) {
+            this.showError('Por favor ingrese una extensión');
+            return;
+        }
+        
+        if (!this.currentCall) {
+            this.showError('No hay llamada activa');
+            this.hideTransferDialog();
+            return;
+        }
+        
+        if (this.config.debug_mode) {
+            console.log('📞 [WebRTC Softphone] Transferiendo llamada a extensión:', extension);
+        }
+        
+        try {
+            // Verificar que la sesión tenga el método refer()
+            if (!this.currentCall || typeof this.currentCall.refer !== 'function') {
+                throw new Error('La sesión actual no soporta transferencias');
+            }
+            
+            // Crear URI de destino para transferencia
+            const targetUriString = `sip:${extension}@${this.config.sip_domain}`;
+            let targetUri = SIP.UserAgent.makeURI(targetUriString);
+            if (!targetUri) {
+                throw new Error('No se pudo crear URI de destino');
+            }
+            
+            // Parchear URI
+            targetUri = this._patchUriClone(targetUri);
+            
+            if (this.config.debug_mode) {
+                console.log('📞 [WebRTC Softphone] Iniciando transferencia a:', targetUriString);
+            }
+            
+            // Realizar la transferencia usando el método refer() directamente de la sesión
+            // SIP.js usa refer() para transferencias ciegas (blind transfer)
+            const referResult = this.currentCall.refer(targetUri);
+            
+            // Si refer() retorna una promesa, manejarla
+            if (referResult && typeof referResult.then === 'function') {
+                referResult
+                    .then(() => {
+                        if (this.config.debug_mode) {
+                            console.log('✅ [WebRTC Softphone] Transferencia completada a', extension);
+                        }
+                        this.hideTransferDialog();
+                        this.showNotification(`Llamada transferida a ${extension}`, 'success');
+                        
+                        // La llamada se terminará automáticamente después de la transferencia
+                        setTimeout(() => {
+                            if (this.config.debug_mode) {
+                                console.log('🔄 [WebRTC Softphone] Limpiando sesión después de transferencia');
+                            }
+                            this.endCall();
+                        }, 1000);
+                    })
+                    .catch((referError) => {
+                        console.error('❌ [WebRTC Softphone] Error en la promesa de refer():', referError);
+                        this.showError(`Error al transferir llamada: ${referError.message || 'Desconocido'}`);
+                        this.hideTransferDialog();
+                    });
+            } else {
+                // Si no retorna promesa, asumir que fue exitoso
+                if (this.config.debug_mode) {
+                    console.log('✅ [WebRTC Softphone] Transferencia iniciada a', extension);
+                }
+                this.hideTransferDialog();
+                this.showNotification(`Transferencia iniciada a ${extension}`, 'success');
+                
+                // Esperar un momento y luego limpiar
+                setTimeout(() => {
+                    this.endCall();
+                }, 1500);
+            }
+            
+        } catch (error) {
+            console.error('❌ [WebRTC Softphone] Error al transferir llamada:', error);
+            this.showError('Error al transferir llamada: ' + error.message);
+            this.hideTransferDialog();
+        }
     }
     
     /**
