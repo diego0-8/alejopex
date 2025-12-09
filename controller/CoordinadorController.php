@@ -1863,7 +1863,7 @@ class CoordinadorController {
      */
     public function cambiarEstadoTarea($tarea_id, $nuevo_estado, $resultado = null) {
         try {
-            return $this->asignacion_asesor_model->cambiarEstado($tarea_id, $nuevo_estado, $resultado);
+            return $this->asignacion_asesor_model->cambiarEstado($tarea_id, $nuevo_estado);
         } catch (Exception $e) {
             error_log("Error al cambiar estado de tarea: " . $e->getMessage());
             return [

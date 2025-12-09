@@ -281,9 +281,9 @@
 <body data-user-id="<?php echo $_SESSION['usuario_id'] ?? ''; ?>">
 
     <?php 
-    // Incluir navbar compartido
-    $action = 'asesor_dashboard';
-    include 'views/Navbar.php'; 
+    // Incluir navbar usando helper unificado (solo si no estamos en iframe)
+    require_once 'views/helpers/navbar-helper.php';
+    incluirNavbarSiNoEsIframe('asesor_dashboard');
     ?>
 
     <div class="main-container">
@@ -715,154 +715,14 @@
         </div>
     </div>
 
+    <!-- Funciones comunes del asesor (evita duplicación) -->
+    <script src="assets/js/asesor-common.js"></script>
     <script src="assets/js/asesor-dashboard.js"></script>
     <script src="assets/js/asesor-clientes.js"></script>
     <script src="assets/js/asesor-tiempos.js"></script>
     <script src="assets/js/hybrid-updater.js"></script>
     
     <script>
-        // Función para abrir/cerrar modal de tiempo
-        function toggleTiempoModal() {
-            const modalTiempo = document.getElementById('modal-tiempo-sesion');
-            const modalPausa = document.getElementById('modal-pausa');
-            
-            // Si está en pausa, mostrar el modal de pausa en vez del de tiempo
-            if (window.asesorTiemposGlobal && window.asesorTiemposGlobal.estaPausado) {
-                if (modalPausa) {
-                    modalPausa.style.display = 'flex';
-                }
-                // No abrir el modal de tiempo si está en pausa
-                return;
-            }
-            
-            // Si no está en pausa, mostrar el modal de tiempo normal
-            if (modalTiempo) {
-                modalTiempo.style.display = modalTiempo.style.display === 'none' ? 'flex' : 'none';
-            }
-        }
-        
-        // Funciones globales para los botones de pausa
-        function iniciarPausaBreak() {
-            if (window.asesorTiempos) {
-                window.asesorTiempos.iniciarPausa('break');
-            }
-        }
-        
-        function iniciarPausaAlmuerzo() {
-            if (window.asesorTiempos) {
-                window.asesorTiempos.iniciarPausa('almuerzo');
-            }
-        }
-        
-        // Variables para la verificación de contraseña
-        let intentosVerificacion = 3;
-        
-        function mostrarModalVerificacion() {
-            const modal = document.getElementById('modal-verificacion-contrasena');
-            if (modal) {
-                modal.style.display = 'flex';
-                document.getElementById('input-contrasena-verificacion').value = '';
-                document.getElementById('mensaje-error-verificacion').style.display = 'none';
-                intentosVerificacion = 3;
-                document.getElementById('intentos-restantes').textContent = '3';
-            }
-        }
-        
-        function cerrarModalVerificacion() {
-            const modal = document.getElementById('modal-verificacion-contrasena');
-            if (modal) {
-                modal.style.display = 'none';
-            }
-        }
-        
-        async function verificarContrasena() {
-            const contrasena = document.getElementById('input-contrasena-verificacion').value;
-            const mensajeError = document.getElementById('mensaje-error-verificacion');
-            const intentosRestantes = document.getElementById('intentos-restantes');
-            
-            if (!contrasena) {
-                alert('Por favor ingrese su contraseña');
-                return;
-            }
-            
-            try {
-                const response = await fetch('index.php?action=verificar_contrasena', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        contrasena: contrasena
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Contraseña correcta, cerrar modal de verificación
-                    cerrarModalVerificacion();
-                    
-                    // Finalizar la pausa
-                    if (window.asesorTiempos) {
-                        window.asesorTiempos.finalizarPausa();
-                    }
-                    
-                    intentosVerificacion = 3;
-                } else {
-                    // Contraseña incorrecta
-                    intentosVerificacion--;
-                    
-                    if (intentosVerificacion > 0) {
-                        mensajeError.style.display = 'block';
-                        intentosRestantes.textContent = intentosVerificacion;
-                        document.getElementById('input-contrasena-verificacion').value = '';
-                    } else {
-                        alert('Demasiados intentos fallidos. La cuenta será bloqueada temporalmente por seguridad.');
-                        window.location.href = 'index.php?action=logout';
-                    }
-                }
-            } catch (error) {
-                console.error('Error al verificar contraseña:', error);
-                alert('Error al verificar la contraseña. Por favor intente nuevamente.');
-            }
-        }
-        
-        function finalizarPausa() {
-            // Esta función ahora se llama después de la verificación
-            if (window.asesorTiempos) {
-                window.asesorTiempos.finalizarPausa();
-            }
-        }
-        
-        function iniciarPausaBano() {
-            if (window.asesorTiempos) {
-                window.asesorTiempos.iniciarPausa('bano');
-            }
-        }
-        
-        function iniciarPausaMantenimiento() {
-            if (window.asesorTiempos) {
-                window.asesorTiempos.iniciarPausa('mantenimiento');
-            }
-        }
-        
-        function iniciarPausaActiva() {
-            if (window.asesorTiempos) {
-                window.asesorTiempos.iniciarPausa('pausa_activa');
-            }
-        }
-        
-        function iniciarActividadExtra() {
-            if (window.asesorTiempos) {
-                window.asesorTiempos.iniciarActividadExtra();
-            }
-        }
-        
-        function finalizarActividadExtra() {
-            if (window.asesorTiempos) {
-                window.asesorTiempos.finalizarActividadExtra();
-            }
-        }
         
         // Función para manejar el cambio en el filtro de gestión
         function manejarCambioGestion(valor) {

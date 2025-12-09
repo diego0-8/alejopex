@@ -68,6 +68,26 @@ body {
 .sidebar-nav li {
     width: 100%;
     margin-bottom: 10px;
+    /* Estilos para li que actúan como botones (con onclick) */
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 8px;
+    color: var(--text-light);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.sidebar-nav li:hover {
+    background-color: var(--hover-color);
+    transform: translateY(-2px);
+}
+
+.sidebar-nav li.active {
+    background-color: var(--active-color);
+    box-shadow: 0 4px 12px rgba(0, 86, 179, 0.3);
 }
 
 .sidebar-nav a {
@@ -80,6 +100,7 @@ body {
     border-radius: 8px;
     transition: all 0.3s ease;
     position: relative;
+    width: 100%;
 }
 
 .sidebar-nav a:hover {
@@ -98,6 +119,48 @@ body {
 }
 
 .sidebar-nav span {
+    font-size: 10px;
+    font-weight: 500;
+    text-align: center;
+    line-height: 1.2;
+}
+
+/* Footer del sidebar */
+.sidebar-footer {
+    margin-top: auto;
+    padding-top: 20px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Botón de logout */
+.logout-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 8px;
+    color: var(--text-light);
+    text-decoration: none;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    background-color: rgba(220, 53, 69, 0.8);
+    width: 100%;
+    cursor: pointer;
+}
+
+.logout-btn:hover {
+    background-color: rgba(220, 53, 69, 1);
+    transform: translateY(-2px);
+}
+
+.logout-btn i {
+    font-size: 18px;
+    margin-bottom: 4px;
+}
+
+.logout-btn span {
     font-size: 10px;
     font-weight: 500;
     text-align: center;

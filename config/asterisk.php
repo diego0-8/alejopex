@@ -14,12 +14,12 @@
 // Usa 'wss://' si tienes SSL/certificado configurado
 // Servidor configurado para Control Next App
 // define('ASTERISK_WSS_SERVER', 'wss://192.168.65.190:8089/ws');
-define('ASTERISK_WSS_SERVER', 'wss://192.168.65.189:8089/ws');
+define('ASTERISK_WSS_SERVER', 'wss://192.168.65.190:8089/ws');
 
 // Dominio SIP (debe coincidir con el 'realm' en pjsip.conf)
 // Dominio del servidor PBX
 // define('ASTERISK_SIP_DOMAIN', '190.60.96.10');
- define('ASTERISK_SIP_DOMAIN', '190.60.96.10');
+define('ASTERISK_SIP_DOMAIN', '190.60.96.10');
 
 // Puerto WSS de Asterisk (por defecto 8089)
 define('ASTERISK_WSS_PORT', 8089);

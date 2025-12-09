@@ -873,9 +873,23 @@ switch ($action) {
         }
         break;
         
+    case 'asesor_app':
+        // Nueva acción para cargar el layout principal con iframe
+        $authController->requerirRol('asesor');
+        // Cargar directamente el layout principal
+        include 'views/layout_asesor.php';
+        exit();
+        break;
+        
     case 'asesor_dashboard':
         $authController->requerirRol('asesor');
         $usuario_actual = $authController->obtenerUsuarioActual();
+        
+        // Si no está en modo iframe, redirigir al layout principal
+        if (!isset($_GET['iframe']) || $_GET['iframe'] != '1') {
+            header('Location: index.php?action=asesor_app');
+            exit();
+        }
         
         // Crear instancia del controlador de asesor
         $asesorController = new AsesorController();
@@ -893,6 +907,17 @@ switch ($action) {
         $authController->requerirRol('asesor');
         $usuario_actual = $authController->obtenerUsuarioActual();
         
+        // Si no está en modo iframe, redirigir al layout principal con el cliente
+        if (!isset($_GET['iframe']) || $_GET['iframe'] != '1') {
+            $cliente_id = $_GET['cliente_id'] ?? null;
+            if ($cliente_id) {
+                header('Location: index.php?action=asesor_app&gestionar_action=asesor_gestionar&cliente_id=' . urlencode($cliente_id));
+            } else {
+                header('Location: index.php?action=asesor_app');
+            }
+            exit();
+        }
+        
         // Verificar que la sesión tenga los datos necesarios
         if (empty($_SESSION['usuario_id']) && empty($_SESSION['usuario_cedula'])) {
             error_log("ERROR asesor_gestionar: Sesión sin usuario_id ni usuario_cedula");
@@ -905,7 +930,7 @@ switch ($action) {
         
         if (!$cliente_id) {
             // Redirigir al dashboard si no hay ID de cliente
-            header('Location: index.php?action=asesor_dashboard');
+            header('Location: index.php?action=asesor_dashboard&iframe=1');
             exit();
         }
         
@@ -916,15 +941,6 @@ switch ($action) {
         $cliente_data = $asesorController->obtenerDatosCliente($cliente_id, $usuario_actual['cedula']);
         $contrato_data = $asesorController->obtenerDatosContrato($cliente_id);
         $historial_data = $asesorController->obtenerHistorialCliente($cliente_id);
-        
-        // DEBUG: Verificar datos de sesión para softphone (solo si debug está activado)
-        if (defined('ASTERISK_DEBUG_MODE') && ASTERISK_DEBUG_MODE) {
-            error_log("DEBUG index.php asesor_gestionar - Variables de sesión:");
-            error_log("  - usuario_id: " . ($_SESSION['usuario_id'] ?? 'NO DEFINIDA'));
-            error_log("  - usuario_cedula: " . ($_SESSION['usuario_cedula'] ?? 'NO DEFINIDA'));
-            error_log("  - usuario_rol: " . ($_SESSION['usuario_rol'] ?? 'NO DEFINIDO'));
-            error_log("  - usuario_nombre: " . ($_SESSION['usuario_nombre'] ?? 'NO DEFINIDO'));
-        }
         
         // Incluir la vista de gestión de cliente
         include 'views/asesor_gestionar.php';
