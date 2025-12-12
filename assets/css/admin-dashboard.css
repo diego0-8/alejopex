@@ -76,6 +76,27 @@ body {
     color: var(--text-light);
 }
 
+/* Estilo especial para el botón de cerrar sesión dentro del menú */
+.sidebar-nav li.logout-menu-item {
+    color: rgba(255, 107, 107, 0.8);
+    margin-top: 10px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-nav li.logout-menu-item:hover {
+    background-color: rgba(255, 107, 107, 0.1);
+    color: #ff6b6b;
+}
+
+.sidebar-nav li.logout-menu-item i {
+    color: rgba(255, 107, 107, 0.8);
+}
+
+.sidebar-nav li.logout-menu-item:hover i {
+    color: #ff6b6b;
+}
+
 /* Footer de la Sidebar */
 .sidebar-footer {
     margin-top: auto;

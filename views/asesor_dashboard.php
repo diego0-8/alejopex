@@ -715,6 +715,7 @@
         </div>
     </div>
 
+    <script src="assets/js/navbar-busqueda-cliente.js"></script>
     <script src="assets/js/asesor-dashboard.js"></script>
     <script src="assets/js/asesor-clientes.js"></script>
     <script src="assets/js/asesor-tiempos.js"></script>

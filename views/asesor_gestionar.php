@@ -454,6 +454,7 @@
         </div>
     </div>
 
+    <script src="assets/js/navbar-busqueda-cliente.js"></script>
     <script src="assets/js/asesor-gestionar.js"></script>
     <script src="assets/js/asesor-tiempos.js"></script>
     <script src="assets/js/hybrid-updater.js"></script>
@@ -757,7 +758,16 @@
         
         function gestionarClienteDesdeModal(clienteId) {
             cerrarModalBusqueda();
-            window.location.href = `index.php?action=asesor_gestionar&cliente_id=${clienteId}`;
+            
+            // Si la función de cambio sin recargar está disponible, usarla
+            if (typeof window.cambiarClienteSinRecargar === 'function') {
+                console.log('Modal-busqueda: Cambiando cliente sin recargar para mantener la llamada');
+                window.cambiarClienteSinRecargar(clienteId);
+            } else {
+                // Si no está disponible, usar redirección normal
+                console.log('Modal-busqueda: Redirigiendo a vista de gestión');
+                window.location.href = `index.php?action=asesor_gestionar&cliente_id=${clienteId}`;
+            }
         }
         
         function volverClientes() {

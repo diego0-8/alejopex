@@ -1803,3 +1803,276 @@ function finalizarGestionCliente() {
         console.error('Error al finalizar gestión:', error);
     });
 }
+
+// ========================================
+// FUNCIÓN PARA CAMBIAR DE CLIENTE SIN RECARGAR
+// Similar al sistema de pestañas del coordinador
+// ========================================
+
+/**
+ * Cambiar de cliente sin recargar la página completa
+ * Esto evita que se caiga la llamada del softphone WebRTC
+ * @param {string} nuevoClienteId - ID del nuevo cliente a cargar
+ */
+function cambiarClienteSinRecargar(nuevoClienteId) {
+    console.log('Asesor_gestionar.js: Cambiando de cliente sin recargar:', nuevoClienteId);
+    
+    if (!nuevoClienteId) {
+        console.error('Asesor_gestionar.js: No se proporcionó ID del cliente');
+        return;
+    }
+    
+    // Si es el mismo cliente, no hacer nada
+    if (clienteId === nuevoClienteId) {
+        console.log('Asesor_gestionar.js: Ya se está mostrando este cliente');
+        return;
+    }
+    
+    // Mostrar indicador de carga
+    mostrarIndicadorCarga();
+    
+    // Limpiar formularios y datos anteriores
+    limpiarFormularios();
+    
+    // Actualizar el ID del cliente
+    clienteId = nuevoClienteId;
+    
+    // Actualizar URL sin recargar (para mantener la navegación correcta)
+    const nuevaUrl = `index.php?action=asesor_gestionar&cliente_id=${nuevoClienteId}`;
+    window.history.pushState({ cliente_id: nuevoClienteId }, '', nuevaUrl);
+    
+    // Reiniciar gestión del nuevo cliente
+    iniciarGestionCliente();
+    
+    // Cargar todos los datos del nuevo cliente
+    // Usar un pequeño delay para asegurar que las funciones se ejecuten correctamente
+    setTimeout(() => {
+        // Cargar datos en paralelo
+        const promesas = [];
+        
+        // Cargar datos del cliente
+        promesas.push(
+            fetch(`index.php?action=obtener_datos_cliente&cliente_id=${nuevoClienteId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.cliente) {
+                        const datosCliente = data.cliente;
+                        document.getElementById('cliente-nombre-completo').textContent = datosCliente.nombre || 'N/A';
+                        document.getElementById('cliente-cedula').textContent = datosCliente.cc || datosCliente.identificacion || 'N/A';
+                        configurarTelefonos(datosCliente);
+                        configurarEmail(datosCliente);
+                        clienteData = datosCliente;
+                    }
+                })
+        );
+        
+        // Cargar contratos
+        promesas.push(
+            fetch(`index.php?action=obtener_contratos_cliente&cliente_id=${nuevoClienteId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        let obligacionesData = [];
+                        if (data.obligaciones && Array.isArray(data.obligaciones)) {
+                            obligacionesData = data.obligaciones;
+                        } else if (data.facturas && Array.isArray(data.facturas)) {
+                            obligacionesData = data.facturas;
+                        } else if (data.contratos && Array.isArray(data.contratos)) {
+                            obligacionesData = data.contratos;
+                        }
+                        mostrarContratos(obligacionesData);
+                    }
+                })
+        );
+        
+        // Cargar historial
+        promesas.push(
+            fetch(`index.php?action=obtener_historial_gestiones&cliente_id=${nuevoClienteId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        mostrarHistorial(data.gestiones || []);
+                    }
+                })
+        );
+        
+        // Esperar a que todas las cargas se completen
+        Promise.all(promesas)
+            .then(() => {
+                console.log('Asesor_gestionar.js: Cliente cambiado exitosamente sin recargar');
+                ocultarIndicadorCarga();
+            })
+            .catch(error => {
+                console.error('Asesor_gestionar.js: Error al cargar datos del nuevo cliente:', error);
+                ocultarIndicadorCarga();
+                mostrarError('Error al cargar datos del cliente. Por favor, recarga la página.');
+            });
+    }, 100);
+}
+
+/**
+ * Limpiar formularios y datos cuando se cambia de cliente
+ */
+function limpiarFormularios() {
+    console.log('Asesor_gestionar.js: Limpiando formularios...');
+    
+    // Limpiar datos del cliente anterior
+    clienteData = null;
+    
+    // Limpiar información del cliente en la UI
+    const nombreCompleto = document.getElementById('cliente-nombre-completo');
+    const cedula = document.getElementById('cliente-cedula');
+    const telefonos = document.getElementById('telefonos-cliente');
+    const email = document.getElementById('cliente-email');
+    
+    if (nombreCompleto) nombreCompleto.textContent = 'Cargando...';
+    if (cedula) cedula.textContent = 'Cargando...';
+    if (telefonos) telefonos.innerHTML = '<span>Cargando...</span>';
+    if (email) email.textContent = '-';
+    
+    // Limpiar selector de contratos
+    const selectContratos = document.getElementById('contrato-gestionar');
+    if (selectContratos) {
+        selectContratos.innerHTML = '<option value="">Selecciona una factura (opcional)</option><option value="ninguna">Ninguna (Cliente no quiso pagar ninguna)</option>';
+    }
+    
+    // Ocultar opciones de todas las facturas
+    const opcionesTodas = document.getElementById('opciones-todas-facturas');
+    if (opcionesTodas) {
+        opcionesTodas.style.display = 'none';
+    }
+    
+    // Limpiar selectores de tipificación
+    const tipoContacto1 = document.getElementById('tipo-contacto-nivel1');
+    const tipoContacto2 = document.getElementById('tipo-contacto-nivel2');
+    const tipoContacto3 = document.getElementById('tipo-contacto-nivel3');
+    
+    if (tipoContacto1) {
+        tipoContacto1.value = '';
+        tipoContacto1.dispatchEvent(new Event('change'));
+    }
+    if (tipoContacto2) {
+        tipoContacto2.innerHTML = '<option value="">Primero selecciona el Nivel 1</option>';
+        const container2 = document.getElementById('nivel2-container');
+        if (container2) container2.style.display = 'none';
+    }
+    if (tipoContacto3) {
+        tipoContacto3.innerHTML = '<option value="">Primero selecciona el Nivel 2</option>';
+        const container3 = document.getElementById('nivel3-container');
+        if (container3) container3.style.display = 'none';
+    }
+    
+    // Limpiar campos de fecha y valor
+    const fechaPago = document.getElementById('fecha-pago');
+    const valorPago = document.getElementById('valor-pago');
+    const camposFechaValor = document.getElementById('campos-fecha-valor');
+    
+    if (fechaPago) fechaPago.value = '';
+    if (valorPago) valorPago.value = '';
+    if (camposFechaValor) camposFechaValor.style.display = 'none';
+    
+    // Limpiar observaciones
+    const observaciones = document.getElementById('observaciones-texto');
+    if (observaciones) observaciones.value = '';
+    
+    // Limpiar canales de comunicación
+    const canales = ['canal-llamada', 'canal-whatsapp', 'canal-email', 'canal-sms', 'canal-correo', 'canal-mensajeria'];
+    canales.forEach(canalId => {
+        const checkbox = document.getElementById(canalId);
+        if (checkbox) checkbox.checked = false;
+    });
+    
+    // Limpiar contenedor de contratos
+    const contratosContainer = document.getElementById('contratos-container');
+    if (contratosContainer) {
+        contratosContainer.innerHTML = `
+            <div class="cargando-contratos">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Cargando obligaciones...</p>
+            </div>
+        `;
+    }
+    
+    // Limpiar historial
+    const historialContainer = document.getElementById('historial-container');
+    if (historialContainer) {
+        historialContainer.innerHTML = `
+            <div class="historial-vacio">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Cargando historial...</p>
+            </div>
+        `;
+    }
+    
+    // Restaurar botones iniciales
+    const botonesIniciales = document.getElementById('botones-iniciales');
+    const botonesDespuesGuardar = document.getElementById('botones-despues-guardar');
+    if (botonesIniciales) botonesIniciales.style.display = 'flex';
+    if (botonesDespuesGuardar) botonesDespuesGuardar.style.display = 'none';
+    
+    console.log('Asesor_gestionar.js: Formularios limpiados');
+}
+
+/**
+ * Mostrar indicador de carga mientras se cambia de cliente
+ */
+function mostrarIndicadorCarga() {
+    // Crear o mostrar overlay de carga
+    let overlay = document.getElementById('cambio-cliente-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'cambio-cliente-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 10005;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 20px;
+        `;
+        overlay.innerHTML = `
+            <div style="background: white; padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+                <i class="fas fa-spinner fa-spin" style="font-size: 48px; color: #007bff; margin-bottom: 15px;"></i>
+                <h3 style="margin: 0; color: #333;">Cargando cliente...</h3>
+                <p style="margin: 10px 0 0 0; color: #666;">Por favor espera, no se perderá tu llamada</p>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    } else {
+        overlay.style.display = 'flex';
+    }
+}
+
+/**
+ * Ocultar indicador de carga
+ */
+function ocultarIndicadorCarga() {
+    const overlay = document.getElementById('cambio-cliente-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+}
+
+// Hacer la función disponible globalmente para que pueda ser llamada desde navbar-busqueda-cliente.js
+window.cambiarClienteSinRecargar = cambiarClienteSinRecargar;
+
+// Manejar el evento popstate (cuando el usuario usa botón atrás/adelante del navegador)
+window.addEventListener('popstate', function(event) {
+    console.log('Asesor_gestionar.js: Evento popstate detectado');
+    
+    // Obtener cliente_id de la URL actual
+    const urlParams = new URLSearchParams(window.location.search);
+    const nuevoClienteId = urlParams.get('cliente_id');
+    
+    // Si hay un cliente_id en la URL y es diferente al actual, cargarlo sin recargar
+    if (nuevoClienteId && nuevoClienteId !== clienteId) {
+        console.log('Asesor_gestionar.js: Cambiando cliente desde popstate:', nuevoClienteId);
+        cambiarClienteSinRecargar(nuevoClienteId);
+    }
+});
