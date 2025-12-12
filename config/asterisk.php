@@ -12,13 +12,16 @@
 // URL del servidor WebSocket de Asterisk
 // Usa 'ws://' si NO tienes SSL configurado
 // Usa 'wss://' si tienes SSL/certificado configurado
-// Servidor configurado para Control Next App
+// IP LOCAL (comentada para referencia): 192.168.65.190
 // define('ASTERISK_WSS_SERVER', 'wss://192.168.65.190:8089/ws');
-define('ASTERISK_WSS_SERVER', 'wss://192.168.65.190:8089/ws');
+// IP PÚBLICA (activa): 190.60.96.10
+define('ASTERISK_WSS_SERVER', 'wss://190.60.96.10:8089/ws');
 
 // Dominio SIP (debe coincidir con el 'realm' en pjsip.conf)
 // Dominio del servidor PBX
-// define('ASTERISK_SIP_DOMAIN', '190.60.96.10');
+// IP LOCAL (comentada para referencia): 192.168.65.190
+// define('ASTERISK_SIP_DOMAIN', '192.168.65.190');
+// IP PÚBLICA (activa): 190.60.96.10
 define('ASTERISK_SIP_DOMAIN', '190.60.96.10');
 
 // Puerto WSS de Asterisk (por defecto 8089)
@@ -64,7 +67,8 @@ define('ASTERISK_PREFERRED_RTP_PORT', 10000);
 // Formato: array de arrays con 'urls', opcionalmente 'username' y 'credential' para TURN
 // IMPORTANTE: Debe ser un array PHP válido, NO una cadena vacía
 //
-// NOTA: En PHP < 7.0, define() no soporta arrays directamente, por lo que usamos una función
+// NOTA: define() no puede definir arrays como constantes en PHP (en ninguna versión),
+// por lo que usamos una función para obtener los servidores ICE
 function getAsteriskIceServers() {
     // CRÍTICO: Configurar STUN servers para resolver problemas RTP
     // Sin STUN/TURN, WebRTC no puede establecer conexiones RTP
@@ -77,10 +81,8 @@ function getAsteriskIceServers() {
     ];
 }
 
-// Para compatibilidad, también definimos como constante si PHP >= 7.0
-if (PHP_VERSION_ID >= 70000 && !defined('ASTERISK_ICE_SERVERS')) {
-    define('ASTERISK_ICE_SERVERS', getAsteriskIceServers());
-}
+// NOTA: No podemos usar define() para arrays en PHP
+// La función getAsteriskIceServers() debe usarse directamente
 
 // Modo de depuración (true = muestra logs en consola del navegador)
 define('ASTERISK_DEBUG_MODE', true);
@@ -95,9 +97,7 @@ define('ASTERISK_DEBUG_MODE', true);
  */
 function getWebRTCConfig() {
     // Obtener servidores ICE (compatible con todas las versiones de PHP)
-    $iceServers = (defined('ASTERISK_ICE_SERVERS') && is_array(ASTERISK_ICE_SERVERS)) 
-        ? ASTERISK_ICE_SERVERS 
-        : getAsteriskIceServers();
+    $iceServers = getAsteriskIceServers();
     
     // Validar que sea un array y no esté vacío
     /* COMENTADO PARA RED LOCAL: No queremos fallback a Google
@@ -229,4 +229,3 @@ function getWebRTCConfig() {
  * pero NO es recomendado para producción debido a limitaciones y latencia.
  */
 ?>
-

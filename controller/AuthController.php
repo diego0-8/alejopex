@@ -150,8 +150,7 @@ class AuthController {
                 header('Location: index.php?action=coordinador_dashboard');
                 break;
             case 'asesor':
-                // Redirigir al layout principal con iframe para mantener el softphone persistente
-                header('Location: index.php?action=asesor_app');
+                header('Location: index.php?action=asesor_dashboard');
                 break;
             default:
                 header('Location: index.php?action=login');

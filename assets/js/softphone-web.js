@@ -27,7 +27,6 @@ class WebRTCSoftphone {
         this.conferenceCalls = []; // Array de llamadas en conferencia
         this.isInConference = false; // Indica si hay una conferencia activa
         this.preferredAudioDeviceId = null; // ID del dispositivo de audio preferido
-        this.isMinimized = false; // Estado de minimizado
         
         // Verificar que SIP.js esté disponible
         if (typeof SIP === 'undefined') {
@@ -119,16 +118,6 @@ class WebRTCSoftphone {
                     <i class="fas fa-phone"></i>
                     Softphone WebRTC
                 </h3>
-                <div class="softphone-header-actions">
-                    <button class="softphone-btn-icon" id="btn-minimize" onclick="window.webrtcSoftphone?.toggleMinimize()" title="Minimizar">
-                        <i class="fas fa-minus"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="softphone-minimized" id="softphone-minimized" style="display: none;">
-                <button class="softphone-expand-btn" id="btn-expand" onclick="window.webrtcSoftphone?.toggleExpand()" title="Expandir">
-                    <i class="fas fa-phone"></i>
-                </button>
             </div>
             <div class="softphone-body">
                 <!-- Estado de conexión -->
@@ -1971,68 +1960,6 @@ class WebRTCSoftphone {
         if (container) {
             container.classList.toggle('hidden');
         }
-    }
-    
-    /**
-     * Minimizar el softphone (mostrar solo logo de teléfono)
-     */
-    toggleMinimize() {
-        const container = document.getElementById('webrtc-softphone');
-        const minimizedView = document.getElementById('softphone-minimized');
-        const header = container?.querySelector('.softphone-header');
-        const body = container?.querySelector('.softphone-body');
-        const btnMinimize = document.getElementById('btn-minimize');
-        const wrapper = container?.closest('.seccion-softphone-wrapper');
-        
-        if (!container) return;
-        
-        // Toggle estado minimizado
-        this.isMinimized = !this.isMinimized;
-        
-        if (this.isMinimized) {
-            // Minimizar
-            container.classList.add('minimized');
-            if (minimizedView) minimizedView.style.display = 'flex';
-            if (header) header.style.display = 'none';
-            if (body) body.style.display = 'none';
-            if (btnMinimize) {
-                btnMinimize.innerHTML = '<i class="fas fa-expand"></i>';
-                btnMinimize.title = 'Expandir';
-            }
-            if (wrapper) {
-                wrapper.style.width = '60px';
-                wrapper.style.height = '60px';
-                wrapper.style.borderRadius = '50%';
-                wrapper.style.background = 'transparent';
-                wrapper.style.border = 'none';
-                wrapper.style.boxShadow = 'none';
-            }
-        } else {
-            // Expandir
-            container.classList.remove('minimized');
-            if (minimizedView) minimizedView.style.display = 'none';
-            if (header) header.style.display = 'flex';
-            if (body) body.style.display = 'block';
-            if (btnMinimize) {
-                btnMinimize.innerHTML = '<i class="fas fa-minus"></i>';
-                btnMinimize.title = 'Minimizar';
-            }
-            if (wrapper) {
-                wrapper.style.width = '320px';
-                wrapper.style.height = 'auto';
-                wrapper.style.borderRadius = '12px';
-                wrapper.style.background = 'white';
-                wrapper.style.border = '1px solid #dee2e6';
-                wrapper.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.15)';
-            }
-        }
-    }
-    
-    /**
-     * Expandir el softphone (desde el estado minimizado)
-     */
-    toggleExpand() {
-        this.toggleMinimize();
     }
     
     /**

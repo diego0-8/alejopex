@@ -187,6 +187,9 @@ class AdminController {
         $this->usuario_model->contrasena = $datos_usuario['contrasena'];
         $this->usuario_model->rol = $datos_usuario['rol'];
         $this->usuario_model->estado = $datos_usuario['estado'];
+        // Campos opcionales para WebRTC Softphone (solo para asesores)
+        $this->usuario_model->extension = !empty($datos_usuario['extension']) ? $datos_usuario['extension'] : null;
+        $this->usuario_model->sip_password = !empty($datos_usuario['sip_password']) ? $datos_usuario['sip_password'] : null;
 
         // Crear el usuario
         if ($this->usuario_model->crear()) {
@@ -228,13 +231,36 @@ class AdminController {
             $datos_usuario['usuario'],
             $datos_usuario['contrasena'] ?? null, // Contraseña opcional
             $datos_usuario['rol'],
-            $datos_usuario['estado']
+            $datos_usuario['estado'],
+            $datos_usuario['extension'] ?? null, // Extensión SIP opcional
+            $datos_usuario['sip_password'] ?? null // Contraseña SIP opcional
         );
 
         if ($resultado) {
             return ['success' => true, 'message' => 'Usuario actualizado exitosamente'];
         } else {
             return ['success' => false, 'message' => 'Error al actualizar el usuario'];
+        }
+    }
+
+    /**
+     * Obtener usuario por cédula (incluyendo extension y sip_password)
+     * @param string $cedula
+     * @return array
+     */
+    public function obtenerUsuarioPorCedula($cedula) {
+        $usuario = $this->usuario_model->obtenerPorCedula($cedula);
+        
+        if ($usuario) {
+            return [
+                'success' => true,
+                'usuario' => $usuario
+            ];
+        } else {
+            return [
+                'success' => false,
+                'message' => 'Usuario no encontrado'
+            ];
         }
     }
 

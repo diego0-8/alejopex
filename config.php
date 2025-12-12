@@ -10,7 +10,7 @@ if (file_exists(__DIR__ . '/config_optimizacion.php')) {
 }
 
 // Configuración de sesión única para este proyecto
-session_name('APEX3_SID');
+session_name('APEX5_SID');
 session_start();
 
 // Configuración de zona horaria
@@ -19,7 +19,7 @@ date_default_timezone_set('America/Bogota');
 // Configuración de la aplicación
 define('APP_NAME', 'IPS CRM');
 define('APP_VERSION', '1.0.0');
-define('APP_URL', 'http://localhost/apex');
+define('APP_URL', 'http://localhost/APEX5');
 
 // Configuración de base de datos
 define('DB_HOST', 'localhost');

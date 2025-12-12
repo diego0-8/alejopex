@@ -1,21 +1,15 @@
 /*
  * Estilos CSS para el dashboard del administrador.
  * Se ha utilizado Flexbox y Grid para la maquetación.
- * 
- * NOTA: Los estilos base del sidebar están en common.css
- * Este archivo solo contiene estilos específicos del dashboard de administrador
  */
-@import url('common.css');
-
 :root {
     --primary-color: #007bff;
     --secondary-color: #6c757d;
     --background-color: #f8f9fa;
-    --sidebar-color: #002341; /* Color específico para admin */
+    --sidebar-color: #343a40;
     --accent-color: #28a745;
-    --active-color: #0056b3; /* Color específico para admin */
+    --active-color: #004085;
     --text-light: #f8f9fa;
-    --hover-color: #003366; /* Color específico para admin */
 }
 
 body {
@@ -28,8 +22,66 @@ body {
     overflow: auto; /* Permite scroll en toda la página */
 }
 
-/* Barra Lateral - Los estilos base están en common.css */
-/* Solo estilos específicos para admin-dashboard aquí */
+/* Barra Lateral */
+.sidebar {
+    width: 80px;
+    background-color: #002341;
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0; /* Evita que la barra lateral se encoja */
+}
+
+.sidebar-logo {
+    color: var(--text-light);
+    font-size: 24px;
+    margin-bottom: 30px;
+}
+
+.sidebar-nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    text-align: center;
+}
+
+.sidebar-nav li {
+    width: 100%;
+    padding: 20px 0;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    transition: background-color 0.3s;
+    font-size: 14px;
+}
+
+.sidebar-nav li i {
+    display: block;
+    font-size: 24px;
+    margin-bottom: 5px;
+}
+
+.sidebar-nav li:hover {
+    background-color: #003366;
+    color: var(--text-light);
+}
+
+.sidebar-nav li.active {
+    background-color: #0056b3;
+    color: var(--text-light);
+    border-left: 5px solid #00c0ff;
+}
+
+.sidebar-nav li.active i, .sidebar-nav li.active span {
+    color: var(--text-light);
+}
+
+/* Footer de la Sidebar */
+.sidebar-footer {
+    margin-top: auto;
+    padding: 20px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
 
 .logout-btn {
     display: flex;

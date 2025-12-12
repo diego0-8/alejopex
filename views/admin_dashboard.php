@@ -9,7 +9,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <link rel="stylesheet" href="assets/css/common.css">
     <link rel="stylesheet" href="assets/css/admin-dashboard.css">
 </head>
 <body data-user-id="<?php echo $_SESSION['usuario_id'] ?? ''; ?>">
@@ -588,7 +587,7 @@
                     </div>
                     <div class="form-group">
                         <label for="rol">Rol *</label>
-                        <select id="rol" name="rol" required>
+                        <select id="rol" name="rol" required onchange="toggleCamposAsesor()">
                             <option value="">Seleccionar rol</option>
                             <option value="administrador">Administrador</option>
                             <option value="coordinador">Coordinador</option>
@@ -596,6 +595,21 @@
                         </select>
                         <small>Define los permisos del usuario</small>
                     </div>
+                    
+                    <!-- Campos específicos para asesores (WebRTC Softphone) -->
+                    <div id="campos-asesor" style="display: none;">
+                        <div class="form-group">
+                            <label for="extension">Extensión SIP</label>
+                            <input type="text" id="extension" name="extension" placeholder="Ej: 1001">
+                            <small>Número de extensión para el softphone WebRTC (opcional)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="sip_password">Contraseña SIP</label>
+                            <input type="password" id="sip_password" name="sip_password" placeholder="Contraseña para autenticación SIP">
+                            <small>Contraseña para autenticación en el servidor SIP (opcional)</small>
+                        </div>
+                    </div>
+                    
                     <div class="form-group">
                         <label for="estado">Estado *</label>
                         <select id="estado" name="estado" required>
@@ -776,13 +790,27 @@
                     
                     <div class="form-group">
                         <label for="editar_rol">Rol *</label>
-                        <select id="editar_rol" name="rol" required>
+                        <select id="editar_rol" name="rol" required onchange="toggleCamposAsesorEditar()">
                             <option value="">Seleccionar rol</option>
                             <option value="administrador">Administrador</option>
                             <option value="coordinador">Coordinador</option>
                             <option value="asesor">Asesor</option>
                         </select>
                         <small>Define los permisos del usuario</small>
+                    </div>
+                    
+                    <!-- Campos específicos para asesores (WebRTC Softphone) -->
+                    <div id="campos-asesor-editar" style="display: none;">
+                        <div class="form-group">
+                            <label for="editar_extension">Extensión SIP</label>
+                            <input type="text" id="editar_extension" name="extension" placeholder="Ej: 1001">
+                            <small>Número de extensión para el softphone WebRTC (opcional)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="editar_sip_password">Contraseña SIP</label>
+                            <input type="password" id="editar_sip_password" name="sip_password" placeholder="Contraseña para autenticación SIP">
+                            <small>Contraseña para autenticación en el servidor SIP (opcional). Dejar vacío para mantener la actual.</small>
+                        </div>
                     </div>
                     
                     <div class="form-group">
@@ -849,6 +877,22 @@
             const modal = document.getElementById(modalId);
             if (modal) {
                 modal.style.display = 'none';
+                // Si es el modal de crear usuario, resetear y ocultar campos de asesor
+                if (modalId === 'crear-usuario') {
+                    const form = document.getElementById('form-crear-usuario');
+                    if (form) {
+                        form.reset();
+                        toggleCamposAsesor();
+                    }
+                }
+                // Si es el modal de editar usuario, resetear y ocultar campos de asesor
+                if (modalId === 'editar-usuario') {
+                    const form = document.getElementById('form-editar-usuario');
+                    if (form) {
+                        form.reset();
+                        toggleCamposAsesorEditar();
+                    }
+                }
             }
         }
         
@@ -856,6 +900,34 @@
         window.onclick = function(event) {
             if (event.target.classList.contains('modal')) {
                 event.target.style.display = 'none';
+            }
+        }
+        
+        // Función para mostrar/ocultar campos específicos de asesor
+        function toggleCamposAsesor() {
+            const rolSelect = document.getElementById('rol');
+            const camposAsesor = document.getElementById('campos-asesor');
+            const extensionInput = document.getElementById('extension');
+            const sipPasswordInput = document.getElementById('sip_password');
+            
+            if (rolSelect && camposAsesor) {
+                if (rolSelect.value === 'asesor') {
+                    camposAsesor.style.display = 'block';
+                    // Hacer los campos opcionales (no requeridos)
+                    if (extensionInput) extensionInput.removeAttribute('required');
+                    if (sipPasswordInput) sipPasswordInput.removeAttribute('required');
+                } else {
+                    camposAsesor.style.display = 'none';
+                    // Limpiar los campos cuando se ocultan
+                    if (extensionInput) {
+                        extensionInput.value = '';
+                        extensionInput.removeAttribute('required');
+                    }
+                    if (sipPasswordInput) {
+                        sipPasswordInput.value = '';
+                        sipPasswordInput.removeAttribute('required');
+                    }
+                }
             }
         }
         
@@ -911,6 +983,8 @@
                     if (result.success) {
                         mostrarAlerta(result.message, 'success', 'crear-usuario');
                         form.reset();
+                        // Ocultar campos de asesor al resetear
+                        toggleCamposAsesor();
                         setTimeout(() => {
                             closeModal('crear-usuario');
                             location.reload();
@@ -1264,34 +1338,101 @@
         }
 
         function editarUsuario(cedula) {
-            // Buscar los datos del usuario en la tabla
-            const row = document.querySelector(`tr[data-usuario-id="${cedula}"]`);
-            if (!row) {
-                mostrarAlertaGeneral('Usuario no encontrado', 'error');
-                return;
+            // Mostrar loading mientras se obtienen los datos
+            const modal = document.getElementById('editar-usuario');
+            if (modal) {
+                const modalBody = modal.querySelector('.modal-body');
+                if (modalBody) {
+                    const loadingDiv = document.createElement('div');
+                    loadingDiv.id = 'loading-editar-usuario';
+                    loadingDiv.style.cssText = 'text-align: center; padding: 40px;';
+                    loadingDiv.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #007bff;"></i><p style="margin-top: 15px;">Cargando información del usuario...</p>';
+                    modalBody.insertBefore(loadingDiv, modalBody.firstChild);
+                }
             }
-
-            // Extraer datos de la fila
-            const nombreCompleto = row.querySelector('.user-details strong').textContent;
-            const usuario = row.querySelector('.username').textContent;
-            const rol = row.querySelector('.rol-badge').textContent.toLowerCase();
-            const estado = row.querySelector('.estado-badge').textContent.toLowerCase();
-            const cedulaText = row.querySelector('.user-details small').textContent.replace('Cédula: ', '');
-
-            // Llenar el formulario del modal
-            document.getElementById('editar_cedula').value = cedula;
-            document.getElementById('editar_cedula_display').value = cedulaText;
-            document.getElementById('editar_nombre_completo').value = nombreCompleto;
-            document.getElementById('editar_usuario').value = usuario;
-            document.getElementById('editar_rol').value = rol;
-            document.getElementById('editar_estado').value = estado;
             
-            // Limpiar campos de contraseña
-            document.getElementById('editar_contrasena').value = '';
-            document.getElementById('editar_confirmar_contrasena').value = '';
-
-            // Abrir el modal
-            openModal('editar-usuario');
+            // Obtener TODOS los datos del usuario desde el servidor
+            fetch(`index.php?action=obtener_usuario&cedula=${cedula}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Remover loading
+                    const loadingDiv = document.getElementById('loading-editar-usuario');
+                    if (loadingDiv) {
+                        loadingDiv.remove();
+                    }
+                    
+                    if (data.success && data.usuario) {
+                        const usuario = data.usuario;
+                        
+                        // Llenar TODOS los campos del formulario con los datos del servidor
+                        document.getElementById('editar_cedula').value = usuario.cedula || cedula;
+                        document.getElementById('editar_cedula_display').value = usuario.cedula || cedula;
+                        document.getElementById('editar_nombre_completo').value = usuario.nombre_completo || '';
+                        document.getElementById('editar_usuario').value = usuario.usuario || '';
+                        document.getElementById('editar_rol').value = usuario.rol || '';
+                        document.getElementById('editar_estado').value = usuario.estado || 'activo';
+                        
+                        // Llenar campos de extensión si existe (solo para asesores)
+                        if (usuario.extension) {
+                            document.getElementById('editar_extension').value = usuario.extension;
+                        } else {
+                            document.getElementById('editar_extension').value = '';
+                        }
+                        
+                        // No cargar la contraseña SIP por seguridad (siempre dejar vacío)
+                        document.getElementById('editar_sip_password').value = '';
+                        
+                        // Limpiar campos de contraseña (no mostrar contraseñas)
+                        document.getElementById('editar_contrasena').value = '';
+                        document.getElementById('editar_confirmar_contrasena').value = '';
+                        
+                        // Mostrar/ocultar campos según el rol
+                        toggleCamposAsesorEditar();
+                        
+                        // Abrir el modal después de cargar los datos
+                        openModal('editar-usuario');
+                    } else {
+                        mostrarAlertaGeneral(data.message || 'Error al obtener datos del usuario', 'error');
+                    }
+                })
+                .catch(error => {
+                    // Remover loading en caso de error
+                    const loadingDiv = document.getElementById('loading-editar-usuario');
+                    if (loadingDiv) {
+                        loadingDiv.remove();
+                    }
+                    
+                    console.error('Error al obtener datos del usuario:', error);
+                    mostrarAlertaGeneral('Error al cargar los datos del usuario', 'error');
+                });
+        }
+        
+        // Función para mostrar/ocultar campos específicos de asesor en edición
+        function toggleCamposAsesorEditar() {
+            const rolSelect = document.getElementById('editar_rol');
+            const camposAsesor = document.getElementById('campos-asesor-editar');
+            const extensionInput = document.getElementById('editar_extension');
+            const sipPasswordInput = document.getElementById('editar_sip_password');
+            
+            if (rolSelect && camposAsesor) {
+                if (rolSelect.value === 'asesor') {
+                    camposAsesor.style.display = 'block';
+                    // Hacer los campos opcionales (no requeridos)
+                    if (extensionInput) extensionInput.removeAttribute('required');
+                    if (sipPasswordInput) sipPasswordInput.removeAttribute('required');
+                } else {
+                    camposAsesor.style.display = 'none';
+                    // Limpiar los campos cuando se ocultan
+                    if (extensionInput) {
+                        extensionInput.value = '';
+                        extensionInput.removeAttribute('required');
+                    }
+                    if (sipPasswordInput) {
+                        sipPasswordInput.value = '';
+                        sipPasswordInput.removeAttribute('required');
+                    }
+                }
+            }
         }
 
         function cambiarEstadoUsuario(cedula, nuevoEstado) {
@@ -1461,8 +1602,10 @@
                     const result = JSON.parse(data);
                     if (result.success) {
                         mostrarAlertaEditar(result.message, 'success');
+                        // Obtener cédula del formulario
+                        const cedulaUsuario = document.getElementById('editar_cedula').value;
                         // Actualizar la tabla sin recargar la página
-                        actualizarFilaUsuario(cedula, {
+                        actualizarFilaUsuario(cedulaUsuario, {
                             nombre_completo: document.getElementById('editar_nombre_completo').value,
                             usuario: document.getElementById('editar_usuario').value,
                             rol: document.getElementById('editar_rol').value,
@@ -1766,6 +1909,50 @@
             margin-top: 5px;
             color: #6c757d;
             font-size: 0.85rem;
+        }
+        
+        /* Estilos para campos específicos de asesor */
+        #campos-asesor,
+        #campos-asesor-editar {
+            background: #f0f7ff;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        #campos-asesor::before,
+        #campos-asesor-editar::before {
+            content: "📞 Configuración Softphone WebRTC";
+            display: block;
+            font-weight: 600;
+            color: #007bff;
+            margin-bottom: 15px;
+            font-size: 0.95rem;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #cce5ff;
+        }
+        
+        #campos-asesor .form-group,
+        #campos-asesor-editar .form-group {
+            margin-bottom: 15px;
+        }
+        
+        #campos-asesor .form-group:last-child,
+        #campos-asesor-editar .form-group:last-child {
+            margin-bottom: 0;
         }
 
         .form-actions {

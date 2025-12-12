@@ -136,9 +136,11 @@ class Usuario {
      * @param string|null $contrasena
      * @param string $rol
      * @param string $estado
+     * @param string|null $extension
+     * @param string|null $sip_password
      * @return array
      */
-    public function actualizar($cedula, $nombre_completo, $usuario, $contrasena = null, $rol, $estado) {
+    public function actualizar($cedula, $nombre_completo, $usuario, $contrasena = null, $rol, $estado, $extension = null, $sip_password = null) {
         try {
             // Verificar que el usuario existe
             $stmt = $this->conn->prepare("SELECT cedula FROM " . $this->table_name . " WHERE cedula = ?");
@@ -167,20 +169,33 @@ class Usuario {
             }
 
             // Preparar la consulta de actualización
+            $campos_actualizar = ['nombre_completo = ?', 'usuario = ?', 'rol = ?', 'estado = ?', 'fecha_actualizacion = CURRENT_TIMESTAMP'];
+            $params = [$nombre_completo, $usuario, $rol, $estado];
+            
+            // Agregar contraseña si se proporciona
             if ($contrasena !== null) {
-                // Actualizar con nueva contraseña
                 $contrasena_hash = password_hash($contrasena, PASSWORD_DEFAULT);
-                $query = "UPDATE " . $this->table_name . " 
-                         SET nombre_completo = ?, usuario = ?, contrasena = ?, rol = ?, estado = ?, fecha_actualizacion = CURRENT_TIMESTAMP 
-                         WHERE cedula = ?";
-                $params = [$nombre_completo, $usuario, $contrasena_hash, $rol, $estado, $cedula];
-            } else {
-                // Actualizar sin cambiar contraseña
-                $query = "UPDATE " . $this->table_name . " 
-                         SET nombre_completo = ?, usuario = ?, rol = ?, estado = ?, fecha_actualizacion = CURRENT_TIMESTAMP 
-                         WHERE cedula = ?";
-                $params = [$nombre_completo, $usuario, $rol, $estado, $cedula];
+                $campos_actualizar[] = 'contrasena = ?';
+                $params[] = $contrasena_hash;
             }
+            
+            // Agregar extensión si se proporciona
+            if ($extension !== null) {
+                $campos_actualizar[] = 'extension = ?';
+                $params[] = $extension;
+            }
+            
+            // Agregar SIP password si se proporciona
+            if ($sip_password !== null && $sip_password !== '') {
+                $campos_actualizar[] = 'sip_password = ?';
+                $params[] = $sip_password;
+            }
+            
+            $params[] = $cedula;
+            
+            $query = "UPDATE " . $this->table_name . " 
+                     SET " . implode(', ', $campos_actualizar) . " 
+                     WHERE cedula = ?";
 
             $stmt = $this->conn->prepare($query);
             $result = $stmt->execute($params);

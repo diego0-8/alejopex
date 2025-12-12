@@ -9,16 +9,28 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <link rel="stylesheet" href="assets/css/common.css">
     <link rel="stylesheet" href="assets/css/admin-dashboard.css">
 </head>
 <body>
 
-    <?php 
-    // Incluir navbar compartido
-    $action = 'admin_asignaciones';
-    include 'views/Navbar.php'; 
-    ?>
+    <div class="sidebar">
+        <div class="sidebar-logo"><?php echo APP_NAME; ?></div>
+        <nav class="sidebar-nav">
+            <ul>
+                <li onclick="window.location.href='index.php?action=dashboard'"><i class="fas fa-th-large"></i> Dashboard</li>
+                <li onclick="window.location.href='index.php?action=admin_usuarios'"><i class="fas fa-users"></i> Usuarios</li>
+                <li class="active" onclick="window.location.href='index.php?action=admin_asignaciones'"><i class="fas fa-user-friends"></i> Asignaciones</li>
+            </ul>
+        </nav>
+        
+        <!-- Botón de Cerrar Sesión en la parte inferior -->
+        <div class="sidebar-footer">
+            <a href="index.php?action=logout" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Cerrar Sesión</span>
+            </a>
+        </div>
+    </div>
 
     <div class="main-container">
         <!-- Encabezado Superior -->

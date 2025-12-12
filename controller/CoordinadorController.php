@@ -1005,7 +1005,20 @@ class CoordinadorController {
      */
     public function obtenerEstadisticasTareasCompletas($coordinador_cedula) {
         try {
-            $tareas = $this->asignacion_asesor_model->obtenerPorCoordinador($coordinador_cedula);
+            $resultado = $this->asignacion_asesor_model->obtenerPorCoordinador($coordinador_cedula);
+            
+            if (!$resultado['success']) {
+                return [
+                    'success' => false,
+                    'total_tareas' => 0,
+                    'tareas_pendientes' => 0,
+                    'tareas_en_progreso' => 0,
+                    'tareas_completadas' => 0,
+                    'tareas_canceladas' => 0
+                ];
+            }
+            
+            $tareas = $resultado['asignaciones'] ?? [];
             $total_tareas = count($tareas);
             
             $estados = [
@@ -1863,6 +1876,7 @@ class CoordinadorController {
      */
     public function cambiarEstadoTarea($tarea_id, $nuevo_estado, $resultado = null) {
         try {
+            // El modelo solo acepta 2 parámetros, el tercero ($resultado) se ignora por ahora
             return $this->asignacion_asesor_model->cambiarEstado($tarea_id, $nuevo_estado);
         } catch (Exception $e) {
             error_log("Error al cambiar estado de tarea: " . $e->getMessage());
@@ -1880,7 +1894,40 @@ class CoordinadorController {
      */
     public function obtenerEstadisticasTareas($coordinador_cedula) {
         try {
-            return $this->asignacion_asesor_model->obtenerEstadisticas($coordinador_cedula);
+            $resultado = $this->asignacion_asesor_model->obtenerEstadisticas($coordinador_cedula);
+            
+            if (!$resultado['success']) {
+                return [
+                    'total_tareas' => 0,
+                    'tareas_pendientes' => 0,
+                    'tareas_en_progreso' => 0,
+                    'tareas_completadas' => 0,
+                    'tareas_canceladas' => 0,
+                    'tareas_pausadas' => 0,
+                    'tareas_vencidas' => 0,
+                    'tareas_por_vencer' => 0,
+                    'tiempo_promedio_minutos' => 0,
+                    'valor_total_logrado' => 0,
+                    'valor_total_objetivo' => 0
+                ];
+            }
+            
+            $estadisticas = $resultado['estadisticas'] ?? [];
+            
+            // Mapear los campos del modelo al formato esperado
+            return [
+                'total_tareas' => (int)($estadisticas['total_asignaciones'] ?? 0),
+                'tareas_pendientes' => (int)($estadisticas['pendientes'] ?? 0),
+                'tareas_en_progreso' => (int)($estadisticas['en_progreso'] ?? 0),
+                'tareas_completadas' => (int)($estadisticas['completadas'] ?? 0),
+                'tareas_canceladas' => (int)($estadisticas['canceladas'] ?? 0),
+                'tareas_pausadas' => 0,
+                'tareas_vencidas' => 0,
+                'tareas_por_vencer' => 0,
+                'tiempo_promedio_minutos' => 0,
+                'valor_total_logrado' => 0,
+                'valor_total_objetivo' => 0
+            ];
         } catch (Exception $e) {
             error_log("Error al obtener estadísticas de tareas: " . $e->getMessage());
             return [
