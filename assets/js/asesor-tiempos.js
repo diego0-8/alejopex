@@ -5,18 +5,75 @@
  */
 
 // Variable global para mantener el estado del reloj entre vistas
-// Cargar desde localStorage si existe
+// SOLUCIÓN: Usar sessionStorage para detectar si es nuevo login o recarga de página
 function cargarEstadoLocalStorage() {
     try {
         const estado = localStorage.getItem('asesorTiemposGlobal');
         const userLoggedIn = localStorage.getItem('asesorLoggedIn');
         
-        // Solo cargar estado si el usuario sigue logueado
-        if (estado && userLoggedIn === 'true') {
+        // Verificar si hay una sesión activa en sessionStorage (misma sesión del navegador)
+        const sesionActiva = sessionStorage.getItem('asesorSesionActiva');
+        
+        // Si NO hay sesión activa en sessionStorage pero SÍ hay estado en localStorage
+        // Significa que es un NUEVO LOGIN (se cerró sesión y se volvió a iniciar)
+        // En este caso, limpiar todo y empezar desde 0
+        if (!sesionActiva && estado) {
+            console.log('AsesorTiempos: Nuevo inicio de sesión detectado, limpiando estado anterior');
+            localStorage.removeItem('asesorTiemposGlobal');
+            localStorage.removeItem('asesorLoggedIn');
+            // Retornar estado inicial limpio
+            return {
+                inicializado: false,
+                sesionId: null,
+                inicioSesion: null,
+                tiempoTotal: 0,
+                tiempoPausas: 0,
+                pausasAcumuladas: { break: 0, almuerzo: 0, pausa_activa: 0, actividad_extra: 0, bano: 0, mantenimiento: 0 },
+                estaPausado: false,
+                tipoPausa: null,
+                inicioPausa: null,
+                tiempoPausaActual: 0,
+                intervaloActualizacion: null,
+                intervaloReloj: null,
+                intervaloPausa: null
+            };
+        }
+        
+        // Si hay sesión activa en sessionStorage Y estado en localStorage
+        // Significa que es una RECARGA DE PÁGINA (misma sesión)
+        // En este caso, cargar el estado para mantener el tiempo
+        if (sesionActiva && estado && userLoggedIn === 'true') {
             const parsed = JSON.parse(estado);
             // Convertir fechas de string a Date si existen
             if (parsed.inicioSesion) {
                 parsed.inicioSesion = new Date(parsed.inicioSesion);
+                
+                // Validar que la sesión no sea demasiado antigua (más de 24 horas)
+                const ahora = new Date();
+                const tiempoTranscurrido = ahora - parsed.inicioSesion;
+                const horasTranscurridas = tiempoTranscurrido / (1000 * 60 * 60);
+                
+                if (horasTranscurridas > 24 || isNaN(parsed.inicioSesion.getTime())) {
+                    console.warn('AsesorTiempos: Sesión demasiado antigua, limpiando');
+                    localStorage.removeItem('asesorTiemposGlobal');
+                    localStorage.removeItem('asesorLoggedIn');
+                    sessionStorage.removeItem('asesorSesionActiva');
+                    return {
+                        inicializado: false,
+                        sesionId: null,
+                        inicioSesion: null,
+                        tiempoTotal: 0,
+                        tiempoPausas: 0,
+                        pausasAcumuladas: { break: 0, almuerzo: 0, pausa_activa: 0, actividad_extra: 0, bano: 0, mantenimiento: 0 },
+                        estaPausado: false,
+                        tipoPausa: null,
+                        inicioPausa: null,
+                        tiempoPausaActual: 0,
+                        intervaloActualizacion: null,
+                        intervaloReloj: null,
+                        intervaloPausa: null
+                    };
+                }
             }
             if (parsed.inicioPausa) {
                 parsed.inicioPausa = new Date(parsed.inicioPausa);
@@ -36,19 +93,26 @@ function cargarEstadoLocalStorage() {
             parsed.intervaloActualizacion = null;
             parsed.intervaloReloj = null;
             parsed.intervaloPausa = null;
-            console.log('AsesorTiempos: Estado cargado desde localStorage');
+            console.log('AsesorTiempos: Estado cargado desde localStorage (recarga de página)');
             return parsed;
-        } else {
-            // Usuario no está logueado o primera vez, resetear todo
-            console.log('AsesorTiempos: Inicializando nuevo estado (usuario desconectado o primera vez)');
-            if (estado) {
-                localStorage.removeItem('asesorTiemposGlobal');
-            }
         }
+        
+        // Si no hay sesión activa ni estado, es la primera vez
+        console.log('AsesorTiempos: Inicializando nuevo estado (primera vez)');
+        
     } catch (e) {
         console.error('Error al cargar estado de localStorage:', e);
+        // Limpiar en caso de error
+        try {
+            localStorage.removeItem('asesorTiemposGlobal');
+            localStorage.removeItem('asesorLoggedIn');
+            sessionStorage.removeItem('asesorSesionActiva');
+        } catch (cleanError) {
+            console.error('Error al limpiar almacenamiento:', cleanError);
+        }
     }
     
+    // Retornar estado inicial limpio
     return {
         inicializado: false,
         sesionId: null,
@@ -213,53 +277,40 @@ class AsesorTiempos {
 
     /**
      * Cargar sesión existente o crear una nueva
+     * LÓGICA: Si hay sesión activa en sessionStorage, mantener el tiempo (recarga)
+     * Si NO hay sesión activa, crear nueva (nuevo login)
      */
     async cargarSesion() {
         try {
-            console.log('AsesorTiempos: Verificando sesión existente...');
+            const sesionActiva = sessionStorage.getItem('asesorSesionActiva');
+            const estadoGuardado = window.asesorTiemposGlobal;
             
-            // Verificar si el usuario está logueado antes de intentar cargar
-            const userLoggedIn = localStorage.getItem('asesorLoggedIn');
-            
-            // Si no está logueado o es la primera vez, crear nueva sesión
-            if (!userLoggedIn || userLoggedIn !== 'true') {
-                console.log('AsesorTiempos: Usuario no logueado o primera vez, creando nueva sesión');
-                await this.crearSesion();
+            // Si hay sesión activa Y hay estado guardado con sesionId, es una recarga
+            // Mantener la sesión existente
+            if (sesionActiva && estadoGuardado.sesionId && estadoGuardado.inicioSesion) {
+                console.log('AsesorTiempos: Recarga de página detectada, manteniendo sesión existente');
+                // Restaurar el estado desde lo guardado
+                this.sesionId = estadoGuardado.sesionId;
+                this.inicioSesion = estadoGuardado.inicioSesion instanceof Date 
+                    ? estadoGuardado.inicioSesion 
+                    : new Date(estadoGuardado.inicioSesion);
+                this.tiempoTotal = estadoGuardado.tiempoTotal || 0;
+                this.tiempoPausas = estadoGuardado.tiempoPausas || 0;
+                this.estaPausado = estadoGuardado.estaPausado || false;
+                this.tipoPausa = estadoGuardado.tipoPausa;
+                this.inicioPausa = estadoGuardado.inicioPausa ? 
+                    (estadoGuardado.inicioPausa instanceof Date ? estadoGuardado.inicioPausa : new Date(estadoGuardado.inicioPausa)) : null;
+                this.tiempoPausaActual = estadoGuardado.tiempoPausaActual || 0;
+                this.pausasAcumuladas = estadoGuardado.pausasAcumuladas || { break: 0, almuerzo: 0, pausa_activa: 0, actividad_extra: 0, bano: 0, mantenimiento: 0 };
+                
+                // Sincronizar estado
+                this.sincronizarEstado();
                 return;
             }
             
-            // Intentar cargar sesión activa desde el servidor
-            const response = await fetch('index.php?action=obtener_sesion_tiempo', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error('Error al obtener sesión');
-            }
-            
-            const data = await response.json();
-            
-            if (data.success && data.sesion) {
-                // Cargar sesión activa desde el servidor
-                this.sesionId = data.sesion.id;
-                this.inicioSesion = new Date(data.sesion.created_at);
-                this.tiempoTotal = parseInt(data.sesion.tiempo_total_sesion || 0);
-                this.tiempoPausas = parseInt(data.sesion.tiempo_pausas || 0);
-                this.estaPausado = data.sesion.estado === 'pausada';
-                this.tipoPausa = data.sesion.tipo_pausa;
-                
-                console.log('AsesorTiempos: Sesión cargada desde servidor:', data.sesion);
-            } else {
-                // No hay sesión activa en el servidor, crear nueva
-                console.log('AsesorTiempos: No hay sesión activa en servidor, creando nueva sesión');
-                await this.crearSesion();
-            }
-            
-            // Sincronizar con estado global y guardar
-            this.sincronizarEstado();
+            // Si NO hay sesión activa, es un nuevo login - crear nueva sesión
+            console.log('AsesorTiempos: Nuevo inicio de sesión, creando nueva sesión desde 0');
+            await this.crearSesion();
             
         } catch (error) {
             console.error('AsesorTiempos: Error al cargar sesión:', error);
@@ -293,14 +344,24 @@ class AsesorTiempos {
                 this.tiempoTotal = 0;
                 this.tiempoPausas = 0;
                 this.estaPausado = false;
+                this.tipoPausa = null;
+                this.inicioPausa = null;
+                this.tiempoPausaActual = 0;
+                this.pausasAcumuladas = { break: 0, almuerzo: 0, pausa_activa: 0, actividad_extra: 0, bano: 0, mantenimiento: 0 };
                 
                 // Marcar que el usuario está logueado
                 localStorage.setItem('asesorLoggedIn', 'true');
                 
+                // CRÍTICO: Marcar sesión activa en sessionStorage (se limpia al cerrar pestaña/navegador)
+                // Esto permite diferenciar entre nuevo login y recarga de página
+                sessionStorage.setItem('asesorSesionActiva', 'true');
+                sessionStorage.setItem('asesorSesionId', this.sesionId);
+                sessionStorage.setItem('asesorSesionInicio', this.inicioSesion.toISOString());
+                
                 // Sincronizar con estado global
                 this.sincronizarEstado();
                 
-                console.log('AsesorTiempos: Nueva sesión creada:', this.sesionId);
+                console.log('AsesorTiempos: Nueva sesión creada:', this.sesionId, 'a las', this.inicioSesion.toISOString());
             }
             
         } catch (error) {
@@ -383,6 +444,26 @@ class AsesorTiempos {
         if (isNaN(tiempoTranscurrido) || tiempoTranscurrido < 0) {
             console.warn('AsesorTiempos: Tiempo inválido calculado');
             this.elementos.contador.textContent = '00:00:00';
+            return;
+        }
+        
+        // VALIDACIÓN CRÍTICA: Si el tiempo es irrazonablemente alto (más de 24 horas = 86400 segundos), resetear
+        const horasTranscurridas = tiempoTranscurrido / 3600;
+        if (horasTranscurridas > 24) {
+            console.error('AsesorTiempos: Tiempo de sesión irrazonablemente alto (' + horasTranscurridas.toFixed(2) + ' horas), reseteando sesión');
+            // Limpiar localStorage y crear nueva sesión
+            localStorage.removeItem('asesorTiemposGlobal');
+            localStorage.removeItem('asesorLoggedIn');
+            // Resetear estado
+            this.inicioSesion = new Date();
+            this.tiempoTotal = 0;
+            window.asesorTiemposGlobal.inicioSesion = this.inicioSesion;
+            window.asesorTiemposGlobal.tiempoTotal = 0;
+            this.sincronizarEstado();
+            // Mostrar tiempo inicial
+            this.elementos.contador.textContent = '00:00:00';
+            // Crear nueva sesión en el servidor
+            this.crearSesion();
             return;
         }
         
@@ -1013,24 +1094,38 @@ class AsesorTiempos {
 
     /**
      * Finalizar sesión
+     * Guarda el tiempo total de la sesión antes de cerrar
      */
     async finalizarSesion() {
         if (!this.sesionId) {
             console.warn('AsesorTiempos: No hay sesión para finalizar');
+            // Limpiar de todas formas
+            this.limpiar();
             return;
         }
         
         try {
-            // Actualizar tiempo final
+            // Calcular tiempo final antes de finalizar
+            const ahora = new Date();
+            if (this.inicioSesion) {
+                const tiempoTranscurrido = Math.floor((ahora - this.inicioSesion) / 1000);
+                this.tiempoTotal = tiempoTranscurrido;
+                window.asesorTiemposGlobal.tiempoTotal = tiempoTranscurrido;
+            }
+            
+            // Actualizar tiempo final en la base de datos
             await this.actualizarTiempoEnBaseDatos();
             
+            // Finalizar sesión en el servidor
             const response = await fetch('index.php?action=finalizar_sesion_tiempo', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    sesion_id: this.sesionId
+                    sesion_id: this.sesionId,
+                    tiempo_total: this.tiempoTotal,
+                    tiempo_pausas: this.tiempoPausas
                 })
             });
             
@@ -1041,31 +1136,93 @@ class AsesorTiempos {
             const data = await response.json();
             
             if (data.success) {
-                console.log('AsesorTiempos: Sesión finalizada');
-                this.limpiar();
+                console.log('AsesorTiempos: Sesión finalizada. Tiempo total guardado:', this.tiempoTotal, 'segundos');
             }
+            
+            // Limpiar todo el estado
+            this.limpiar();
             
         } catch (error) {
             console.error('AsesorTiempos: Error al finalizar sesión:', error);
+            // Limpiar de todas formas
+            this.limpiar();
         }
     }
 
     /**
      * Limpiar intervalos y localStorage
+     * Se ejecuta al cerrar sesión para asegurar que la próxima sesión comience desde 0
      */
     limpiar() {
+        // Limpiar todos los intervalos
         if (this.intervaloReloj) {
             clearInterval(this.intervaloReloj);
+            this.intervaloReloj = null;
         }
         
         if (this.intervaloActualizacion) {
             clearInterval(this.intervaloActualizacion);
+            this.intervaloActualizacion = null;
         }
         
-        // Limpiar localStorage
+        if (this.intervaloPausa) {
+            clearInterval(this.intervaloPausa);
+            this.intervaloPausa = null;
+        }
+        
+        if (this.intervaloActividadExtra) {
+            clearInterval(this.intervaloActividadExtra);
+            this.intervaloActividadExtra = null;
+        }
+        
+        if (this.intervaloBloqueo) {
+            clearInterval(this.intervaloBloqueo);
+            this.intervaloBloqueo = null;
+        }
+        
+        // Resetear estado local
+        this.sesionId = null;
+        this.inicioSesion = null;
+        this.tiempoTotal = 0;
+        this.tiempoPausas = 0;
+        this.estaPausado = false;
+        this.tipoPausa = null;
+        this.inicioPausa = null;
+        this.tiempoPausaActual = 0;
+        this.pausasAcumuladas = { break: 0, almuerzo: 0, pausa_activa: 0, actividad_extra: 0, bano: 0, mantenimiento: 0 };
+        
+        // Resetear estado global
+        window.asesorTiemposGlobal = {
+            inicializado: false,
+            sesionId: null,
+            inicioSesion: null,
+            tiempoTotal: 0,
+            tiempoPausas: 0,
+            pausasAcumuladas: { break: 0, almuerzo: 0, pausa_activa: 0, actividad_extra: 0, bano: 0, mantenimiento: 0 },
+            estaPausado: false,
+            tipoPausa: null,
+            inicioPausa: null,
+            tiempoPausaActual: 0,
+            intervaloActualizacion: null,
+            intervaloReloj: null,
+            intervaloPausa: null
+        };
+        
+        // CRÍTICO: Limpiar sessionStorage (esto marca que se cerró sesión)
+        // La próxima vez que se inicie sesión, no habrá sesión activa y comenzará desde 0
+        try {
+            sessionStorage.removeItem('asesorSesionActiva');
+            sessionStorage.removeItem('asesorSesionId');
+            sessionStorage.removeItem('asesorSesionInicio');
+        } catch (e) {
+            console.error('AsesorTiempos: Error al limpiar sessionStorage:', e);
+        }
+        
+        // Limpiar localStorage completamente
         try {
             localStorage.removeItem('asesorTiemposGlobal');
-            console.log('AsesorTiempos: localStorage limpiado');
+            localStorage.removeItem('asesorLoggedIn');
+            console.log('AsesorTiempos: Estado completamente limpiado. Próxima sesión comenzará desde 0');
         } catch (e) {
             console.error('AsesorTiempos: Error al limpiar localStorage:', e);
         }
@@ -1078,14 +1235,22 @@ document.addEventListener('DOMContentLoaded', function() {
     window.asesorTiempos = new AsesorTiempos();
 });
 
-// Guardar estado antes de cerrar la ventana
+// Guardar estado antes de cerrar la ventana (solo durante la sesión activa)
 window.addEventListener('beforeunload', function() {
-    if (window.asesorTiempos) {
-        // Guardar estado actual en localStorage antes de cerrar (si está logueado)
+    if (window.asesorTiempos && window.asesorTiempos.sesionId) {
+        // Solo guardar si hay una sesión activa
+        // Esto permite mantener el estado si se recarga la página durante la misma sesión
         const userLoggedIn = localStorage.getItem('asesorLoggedIn');
         if (userLoggedIn === 'true') {
+            // Calcular tiempo final antes de guardar
+            const ahora = new Date();
+            if (window.asesorTiempos.inicioSesion) {
+                const tiempoTranscurrido = Math.floor((ahora - window.asesorTiempos.inicioSesion) / 1000);
+                window.asesorTiempos.tiempoTotal = tiempoTranscurrido;
+                window.asesorTiemposGlobal.tiempoTotal = tiempoTranscurrido;
+            }
             window.asesorTiempos.sincronizarEstado();
-            console.log('AsesorTiempos: Estado guardado en localStorage antes de cerrar');
+            console.log('AsesorTiempos: Estado guardado temporalmente (solo para recarga de página)');
         }
     }
 });
@@ -1094,49 +1259,77 @@ window.addEventListener('beforeunload', function() {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('AsesorTiempos: Registrando listener para logout');
     
-    // Intentar obtener el botón de logout
-    const checkLogoutButton = () => {
-        const logoutLink = document.getElementById('logout-link');
+    // Función para interceptar logout
+    const interceptarLogout = async (e) => {
+        // Verificar si el clic es en un elemento de logout
+        const target = e.target.closest('.logout-menu-item') || 
+                       (e.target.onclick && e.target.onclick.toString().includes('action=logout') ? e.target : null) ||
+                       (e.target.href && e.target.href.includes('action=logout') ? e.target : null);
         
-        if (logoutLink && !logoutLink.dataset.listenerAdded) {
-            console.log('AsesorTiempos: Agregando listener al botón de logout');
-            logoutLink.dataset.listenerAdded = 'true';
+        if (!target) return;
+        
+        // Prevenir el comportamiento por defecto
+        e.preventDefault();
+        e.stopPropagation();
+        
+        console.log('AsesorTiempos: Logout detectado, finalizando sesión...');
+        
+        try {
+            // Finalizar sesión de tiempo si existe
+            if (window.asesorTiempos && typeof window.asesorTiempos.finalizarSesion === 'function') {
+                console.log('AsesorTiempos: Finalizando sesión de tiempo...');
+                await window.asesorTiempos.finalizarSesion();
+            }
             
-            logoutLink.addEventListener('click', async function(e) {
-                e.preventDefault();
-                
-                console.log('AsesorTiempos: Logout detectado, finalizando sesión...');
-                
-                try {
-                    // Finalizar sesión de tiempo si existe
-                    if (window.asesorTiempos && typeof window.asesorTiempos.finalizarSesion === 'function') {
-                        console.log('AsesorTiempos: Finalizando sesión de tiempo...');
-                        await window.asesorTiempos.finalizarSesion();
-                    }
-                    
-                    // Limpiar localStorage
-                    localStorage.removeItem('asesorTiemposGlobal');
-                    localStorage.removeItem('asesorLoggedIn');
-                    console.log('AsesorTiempos: localStorage limpiado');
-                    
-                    // Redirigir al logout
-                    window.location.href = 'index.php?action=logout';
-                    
-                } catch (error) {
-                    console.error('AsesorTiempos: Error al finalizar sesión:', error);
-                    // Limpiar localStorage de todas formas
-                    localStorage.removeItem('asesorTiemposGlobal');
-                    localStorage.removeItem('asesorLoggedIn');
-                    // Redirigir al logout
-                    window.location.href = 'index.php?action=logout';
-                }
-            });
-        } else if (!logoutLink) {
-            // Intentar nuevamente después de un momento
-            setTimeout(checkLogoutButton, 100);
+            // Limpiar localStorage completamente
+            localStorage.removeItem('asesorTiemposGlobal');
+            localStorage.removeItem('asesorLoggedIn');
+            
+            // CRÍTICO: Limpiar sessionStorage para marcar que se cerró sesión
+            sessionStorage.removeItem('asesorSesionActiva');
+            sessionStorage.removeItem('asesorSesionId');
+            sessionStorage.removeItem('asesorSesionInicio');
+            
+            console.log('AsesorTiempos: Estado limpiado. Próxima sesión comenzará desde 0');
+            
+            // Redirigir al logout
+            window.location.href = 'index.php?action=logout';
+            
+        } catch (error) {
+            console.error('AsesorTiempos: Error al finalizar sesión:', error);
+            // Limpiar localStorage de todas formas
+            localStorage.removeItem('asesorTiemposGlobal');
+            localStorage.removeItem('asesorLoggedIn');
+            // Limpiar sessionStorage
+            sessionStorage.removeItem('asesorSesionActiva');
+            sessionStorage.removeItem('asesorSesionId');
+            sessionStorage.removeItem('asesorSesionInicio');
+            // Redirigir al logout
+            window.location.href = 'index.php?action=logout';
         }
     };
     
-    checkLogoutButton();
+    // Interceptar clics en elementos con clase logout-menu-item
+    document.addEventListener('click', interceptarLogout, true);
+    
+    // También interceptar cambios en onclick de elementos dinámicos
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            mutation.addedNodes.forEach(function(node) {
+                if (node.nodeType === 1) { // Element node
+                    if (node.classList && node.classList.contains('logout-menu-item')) {
+                        // Ya está cubierto por el listener de click
+                    }
+                }
+            });
+        });
+    });
+    
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+    
+    console.log('AsesorTiempos: Listeners de logout registrados');
 });
 

@@ -8,6 +8,7 @@
 $rol_usuario = $_SESSION['usuario_rol'] ?? 'guest';
 $usuario_nombre = $_SESSION['usuario_nombre'] ?? 'Usuario';
 $usuario_inicial = substr($usuario_nombre, 0, 1);
+$action = $action ?? $_GET['action'] ?? 'login';
 ?>
 
 <div class="sidebar">
