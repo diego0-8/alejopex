@@ -15,14 +15,14 @@
 // IP LOCAL (comentada para referencia): 192.168.65.190
 // define('ASTERISK_WSS_SERVER', 'wss://192.168.65.190:8089/ws');
 // IP PÚBLICA (activa): 190.60.96.10
-define('ASTERISK_WSS_SERVER', 'wss://190.60.96.10:8089/ws');
+define('ASTERISK_WSS_SERVER', 'wss://190.60.96.12:8089/ws');
 
 // Dominio SIP (debe coincidir con el 'realm' en pjsip.conf)
 // Dominio del servidor PBX
 // IP LOCAL (comentada para referencia): 192.168.65.190
 // define('ASTERISK_SIP_DOMAIN', '192.168.65.190');
-// IP PÚBLICA (activa): 190.60.96.10
-define('ASTERISK_SIP_DOMAIN', '190.60.96.10');
+// IP PÚBLICA (activa): 190.60.96.12
+define('ASTERISK_SIP_DOMAIN', '190.60.96.12');
 
 // Puerto WSS de Asterisk (por defecto 8089)
 define('ASTERISK_WSS_PORT', 8089);

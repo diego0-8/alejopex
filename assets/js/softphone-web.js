@@ -28,6 +28,9 @@ class WebRTCSoftphone {
         this.isInConference = false; // Indica si hay una conferencia activa
         this.preferredAudioDeviceId = null; // ID del dispositivo de audio preferido
         
+        // Guard para evitar dobles acciones en llamadas entrantes (doble click / múltiples eventos)
+        this.acceptInProgress = false;
+        
         // Verificar que SIP.js esté disponible
         if (typeof SIP === 'undefined') {
             console.error('❌ [WebRTC Softphone] SIP.js no está cargado');
@@ -833,6 +836,7 @@ class WebRTCSoftphone {
         // 1. Guardar la sesión actual
         this.incomingCallInvitation = invitation;
         this.currentNumber = caller;
+        this.acceptInProgress = false;
         
         // 2. Actualizar UI - Mostrar información de llamada entrante
         try {
@@ -875,6 +879,8 @@ class WebRTCSoftphone {
             }
             
             if (stateStr === 'Terminated' || stateStr === 'Canceled') {
+                // Si estaba aceptando, liberar el guard
+                this.acceptInProgress = false;
                 if (this.config.debug_mode) {
                     console.log('📞 [WebRTC Softphone] Llamada entrante terminada o cancelada');
                 }
@@ -897,6 +903,8 @@ class WebRTCSoftphone {
                     }
                 }
             } else if (stateStr === 'Established') {
+                // Si estaba aceptando, liberar el guard
+                this.acceptInProgress = false;
                 // Llamada aceptada
                 this.currentCall = invitation;
                 this.incomingCallInvitation = null; // Ya no es una llamada entrante pendiente
@@ -1028,11 +1036,46 @@ class WebRTCSoftphone {
             console.warn('⚠️ [WebRTC Softphone] No hay llamada entrante para aceptar');
             return;
         }
+
+        // Evitar doble accept por doble click o re-entrada
+        if (this.acceptInProgress) {
+            if (this.config.debug_mode) {
+                console.warn('⚠️ [WebRTC Softphone] acceptIncomingCall ignorado: accept ya está en progreso');
+            }
+            return;
+        }
+
+        const inv = this.incomingCallInvitation;
+        const invState = String(inv?.state);
+        if (this.config.debug_mode) {
+            console.log('📞 [WebRTC Softphone] Estado actual de Invitation antes de accept():', invState);
+        }
+
+        // Si ya está en Establishing/Established, NO volver a aceptar (eso causa "Invalid session state Establishing")
+        // En ese caso solo sincronizamos UI y dejamos que SIP.js termine la negociación.
+        if (invState === 'Establishing' || invState === 'Established' || invState === '4') {
+            if (this.config.debug_mode) {
+                console.warn('⚠️ [WebRTC Softphone] Invitation ya está aceptándose/establecida, no se llama accept() otra vez');
+            }
+            this.currentCall = inv;
+            this.hideIncomingCallNotification();
+            return;
+        }
+        
+        // Si ya está terminada/cancelada, no se puede aceptar
+        if (invState === 'Terminated' || invState === 'Canceled' || invState === '5') {
+            this.acceptInProgress = false;
+            this.hideIncomingCallNotification();
+            this.showError('La llamada ya no está disponible (terminada/cancelada).');
+            return;
+        }
         
         try {
             if (this.config.debug_mode) {
                 console.log('✅ [WebRTC Softphone] Usuario presionó Contestar');
             }
+
+            this.acceptInProgress = true;
             
             // Reutilizar la misma configuración robusta de ICE y Audio que usamos para llamar (igual que APEX2)
             const options = {
@@ -1065,6 +1108,7 @@ class WebRTCSoftphone {
             // Actualizar UI a "En llamada"
             this.currentCall = this.incomingCallInvitation;
             this.hideIncomingCallNotification();
+            this.acceptInProgress = false;
             
             if (this.config.debug_mode) {
                 console.log('✅ [WebRTC Softphone] Llamada aceptada exitosamente');
@@ -1072,7 +1116,22 @@ class WebRTCSoftphone {
             
         } catch (error) {
             console.error('❌ [WebRTC Softphone] Error al aceptar llamada:', error);
-            this.showError('Error al aceptar la llamada: ' + error.message);
+            const msg = (error && error.message) ? String(error.message) : String(error);
+            
+            // Caso típico: doble accept cuando ya está "Establishing"
+            if (msg.includes('Invalid session state') && msg.includes('Establishing')) {
+                if (this.config.debug_mode) {
+                    console.warn('⚠️ [WebRTC Softphone] accept() llamado cuando ya estaba Establishing. Se ignora y se espera estabilización.');
+                }
+                // No terminar la llamada: dejar que SIP.js continúe la negociación
+                this.currentCall = this.incomingCallInvitation;
+                this.hideIncomingCallNotification();
+                this.acceptInProgress = false;
+                return;
+            }
+            
+            this.acceptInProgress = false;
+            this.showError('Error al aceptar la llamada: ' + msg);
             this.hideIncomingCallNotification();
             this.endCall();
         }
