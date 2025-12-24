@@ -15,14 +15,14 @@
 // IP LOCAL (comentada para referencia): 192.168.65.190
 // define('ASTERISK_WSS_SERVER', 'wss://192.168.65.190:8089/ws');
 // IP PÚBLICA (activa): 190.60.96.10
-define('ASTERISK_WSS_SERVER', 'wss://190.60.96.12:8089/ws');
+define('ASTERISK_WSS_SERVER', 'wss://192.168.65.189:8089/ws');
 
 // Dominio SIP (debe coincidir con el 'realm' en pjsip.conf)
 // Dominio del servidor PBX
 // IP LOCAL (comentada para referencia): 192.168.65.190
 // define('ASTERISK_SIP_DOMAIN', '192.168.65.190');
 // IP PÚBLICA (activa): 190.60.96.12
-define('ASTERISK_SIP_DOMAIN', '190.60.96.12');
+define('ASTERISK_SIP_DOMAIN', '192.168.65.189');
 
 // Puerto WSS de Asterisk (por defecto 8089)
 define('ASTERISK_WSS_PORT', 8089);
@@ -69,7 +69,8 @@ define('ASTERISK_PREFERRED_RTP_PORT', 10000);
 //
 // NOTA: define() no puede definir arrays como constantes en PHP (en ninguna versión),
 // por lo que usamos una función para obtener los servidores ICE
-function getAsteriskIceServers() {
+function getAsteriskIceServers()
+{
     // CRÍTICO: Configurar STUN servers para resolver problemas RTP
     // Sin STUN/TURN, WebRTC no puede establecer conexiones RTP
     return [
@@ -95,10 +96,11 @@ define('ASTERISK_DEBUG_MODE', true);
  * Retorna la configuración de WebRTC como array
  * @return array Configuración del softphone
  */
-function getWebRTCConfig() {
+function getWebRTCConfig()
+{
     // Obtener servidores ICE (compatible con todas las versiones de PHP)
     $iceServers = getAsteriskIceServers();
-    
+
     // Validar que sea un array y no esté vacío
     /* COMENTADO PARA RED LOCAL: No queremos fallback a Google
     if (!is_array($iceServers) || empty($iceServers)) {
@@ -109,7 +111,7 @@ function getWebRTCConfig() {
         ];
     }
     */
-    
+
     return [
         'wss_server' => ASTERISK_WSS_SERVER,
         'sip_domain' => ASTERISK_SIP_DOMAIN,
@@ -125,33 +127,164 @@ function getWebRTCConfig() {
 // NOTAS DE CONFIGURACIÓN
 // =====================================================================
 /*
- * PASOS PARA CONFIGURAR TU SERVIDOR ASTERISK:
+ * =====================================================================
+ * PASOS PARA CONFIGURAR WEBRTC EN ISSABEL (Interfaz Web)
+ * =====================================================================
  * 
- * 1. En tu servidor Issabel/Asterisk, edita: /etc/asterisk/http.conf
- *    [general]
- *    enabled=yes
- *    bindaddr=0.0.0.0
- *    tlsenable=yes
- *    tlsbindaddr=0.0.0.0:8089
- *    tlscertfile=/etc/asterisk/keys/asterisk.pem
+ * PASO 1: HABILITAR WEBSOCKET (WSS) EN ISSABEL
+ * ---------------------------------------------------------------------
  * 
- * 2. Edita: /etc/asterisk/pjsip.conf
- *    [transport-wss]
- *    type=transport
- *    protocol=wss
- *    bind=0.0.0.0:8089
+ * 1.1. Accede a la interfaz web de Issabel:
+ *      - URL: http://TU_IP_ISSABEL o https://TU_IP_ISSABEL
+ *      - Usuario: admin (o tu usuario administrador)
+ *      - Contraseña: (tu contraseña de administrador)
  * 
- * 3. Genera certificado SSL si no tienes:
- *    cd /etc/asterisk/keys/
- *    openssl req -x509 -newkey rsa:4096 -keyout asterisk.key -out asterisk.crt -days 365 -nodes
- *    cat asterisk.key asterisk.crt > asterisk.pem
+ * 1.2. Ve a: "Admin" → "Asterisk SIP Settings" (o "Configuración SIP")
  * 
- * 4. Reinicia Asterisk:
- *    systemctl restart asterisk
+ * 1.3. Busca la sección "PJSIP Settings" o "Transport Settings"
  * 
- * 5. Configura las extensiones en Issabel FreePBX con:
- *    - Transport: transport-wss
- *    - Encryption: yes (SRTP)
+ * 1.4. Verifica que exista un transporte "transport-wss":
+ *      - Si NO existe, créalo desde la interfaz o manualmente:
+ *        Ve a: "Settings" → "Advanced Settings" → "PJSIP Transport"
+ *        Crea un nuevo transporte con:
+ *          - Name: transport-wss
+ *          - Protocol: wss
+ *          - Bind: 0.0.0.0:8089
+ *          - External Media Address: (dejar vacío o tu IP pública)
+ *          - External Signalling Address: (dejar vacío o tu IP pública)
+ * 
+ * 1.5. Si prefieres hacerlo manualmente (SSH):
+ *      - Conecta por SSH a tu servidor Issabel
+ *      - Edita: /etc/asterisk/pjsip.conf
+ *      - Busca o crea la sección [transport-wss]:
+ *        [transport-wss]
+ *        type=transport
+ *        protocol=wss
+ *        bind=0.0.0.0:8089
+ *      - Guarda y reinicia: systemctl restart asterisk
+ * 
+ * PASO 2: CONFIGURAR HTTP/HTTPS PARA WEBSOCKET
+ * ---------------------------------------------------------------------
+ * 
+ * 2.1. En Issabel, ve a: "Admin" → "Asterisk SIP Settings"
+ * 
+ * 2.2. Busca "HTTP Settings" o "Asterisk HTTP Server"
+ * 
+ * 2.3. Verifica que esté habilitado:
+ *      - HTTP Enabled: Yes
+ *      - Bind Address: 0.0.0.0
+ *      - TLS Enabled: Yes (para WSS)
+ *      - TLS Bind Address: 0.0.0.0:8089
+ *      - TLS Certificate: /etc/asterisk/keys/asterisk.pem
+ * 
+ * 2.4. Si no tienes certificado SSL:
+ *      - Conecta por SSH a Issabel
+ *      - Ejecuta:
+ *        cd /etc/asterisk/keys/
+ *        openssl req -x509 -newkey rsa:4096 -keyout asterisk.key -out asterisk.crt -days 365 -nodes
+ *        cat asterisk.key asterisk.crt > asterisk.pem
+ *        chown asterisk:asterisk asterisk.pem
+ *        chmod 600 asterisk.pem
+ *      - Reinicia: systemctl restart asterisk
+ * 
+ * PASO 3: CONFIGURAR EXTENSIÓN PARA WEBRTC EN ISSABEL
+ * ---------------------------------------------------------------------
+ * 
+ * 3.1. Ve a: "Applications" → "Extensions" (o "Extensiones")
+ * 
+ * 3.2. Selecciona la extensión que quieres usar para WebRTC (ej: 6112)
+ *      O crea una nueva extensión si no existe
+ * 
+ * 3.3. En la pestaña "Advanced" o "Avanzado", configura:
+ * 
+ *      a) TRANSPORT:
+ *         - Transport: transport-wss
+ *         - (Si no aparece, ve al PASO 1 para crearlo)
+ * 
+ *      b) ENCRYPTION (Cifrado):
+ *         - Encryption: yes
+ *         - Media Encryption: SRTP
+ *         - (Esto habilita SRTP para el audio)
+ * 
+ *      c) RTCP-MUX (IMPORTANTE para WebRTC):
+ *         - Busca la opción "RTCP MUX" o "rtcp_mux"
+ *         - Actívala: Yes o Enabled
+ *         - (Si no aparece en la interfaz, edita manualmente pjsip.conf)
+ * 
+ *      d) AUTHENTICATION:
+ *         - Secret: (la contraseña SIP de la extensión)
+ *         - Asegúrate de que coincida EXACTAMENTE con la que usas en este archivo PHP
+ * 
+ * 3.4. Si "RTCP MUX" no aparece en la interfaz web:
+ *      - Conecta por SSH a Issabel
+ *      - Edita: /etc/asterisk/pjsip.conf
+ *      - Busca la sección de tu extensión (ej: [6112])
+ *      - Agrega o verifica:
+ *        rtcp_mux=yes
+ *      - Guarda y reinicia: systemctl restart asterisk
+ * 
+ * 3.5. PERMIT (Permisos):
+ *      - En la extensión, busca el campo "Permit" o "IP Address"
+ *      - Déjalo VACÍO para permitir conexiones desde cualquier IP
+ *      - O agrega la IP específica si quieres restringir
+ *      - IMPORTANTE: Si está lleno con una IP incorrecta, el registro fallará con 403
+ * 
+ * PASO 4: VERIFICAR CONFIGURACIÓN
+ * ---------------------------------------------------------------------
+ * 
+ * 4.1. Desde la consola de Issabel (SSH), verifica:
+ *      asterisk -rx "pjsip show transports"
+ *      - Debe aparecer "transport-wss" con estado "OK"
+ * 
+ * 4.2. Verifica la extensión:
+ *      asterisk -rx "pjsip show endpoint 6112"
+ *      - Debe mostrar "transport: transport-wss"
+ *      - Debe mostrar "rtcp_mux: yes"
+ * 
+ * 4.3. Verifica el registro:
+ *      asterisk -rx "pjsip show registrations"
+ *      - Debe aparecer tu extensión registrada
+ * 
+ * 4.4. Revisa los logs si hay problemas:
+ *      tail -f /var/log/asterisk/full
+ *      - Busca errores relacionados con "transport-wss" o "WSS"
+ * 
+ * PASO 5: CONFIGURAR FIREWALL (Si aplica)
+ * ---------------------------------------------------------------------
+ * 
+ * 5.1. Asegúrate de que el puerto 8089 esté abierto:
+ *      - En Issabel: "Admin" → "Firewall" → "Ports"
+ *      - Agrega puerto: 8089 (TCP) para WSS
+ *      - O desde SSH: firewall-cmd --add-port=8089/tcp --permanent
+ *                    firewall-cmd --reload
+ * 
+ * 5.2. Para RTP (audio), abre el rango:
+ *      - Puertos UDP: 10000-20000
+ *      - En Issabel: "Admin" → "Firewall" → "Ports"
+ *      - Agrega rango: 10000-20000 (UDP)
+ * 
+ * =====================================================================
+ * TROUBLESHOOTING (Solución de Problemas)
+ * =====================================================================
+ * 
+ * PROBLEMA: Error 403 al registrar
+ * SOLUCIÓN:
+ *   1. Verifica que el "Secret" en Issabel coincida EXACTAMENTE con el password en este archivo
+ *   2. Verifica que el campo "Permit" esté VACÍO (no tenga IPs restringidas)
+ *   3. Verifica que el "Realm" en pjsip.conf coincida con ASTERISK_SIP_DOMAIN
+ *   4. Revisa logs: tail -f /var/log/asterisk/full | grep 403
+ * 
+ * PROBLEMA: La llamada se corta al contestar
+ * SOLUCIÓN:
+ *   1. Verifica que RTCP-MUX esté habilitado en la extensión
+ *   2. Verifica que el transporte sea "transport-wss" (no "transport-udp")
+ *   3. Verifica que Encryption esté en "yes" con "SRTP"
+ * 
+ * PROBLEMA: No se escucha audio
+ * SOLUCIÓN:
+ *   1. Verifica que los puertos RTP (10000-20000 UDP) estén abiertos
+ *   2. Verifica que STUN servers estén configurados correctamente
+ *   3. Revisa logs de RTP: asterisk -rx "rtp set debug on"
  * 
  * =====================================================================
  * CONFIGURACIÓN DE SERVIDOR TURN (COTURN) - ALTAMENTE RECOMENDADO

@@ -124,13 +124,15 @@ async function buscarClienteNavbar() {
     const termino = document.getElementById('navbar-busqueda-input')?.value.trim();
     const resultadosDiv = document.getElementById('navbar-resultados-busqueda');
     
+    console.log('[Navbar Busqueda] Iniciando búsqueda con término:', termino);
+    
     if (!termino) {
         alert('Por favor ingrese CC o celular');
         return;
     }
     
     if (!resultadosDiv) {
-        console.error('No se encontró el contenedor de resultados');
+        console.error('[Navbar Busqueda] No se encontró el contenedor de resultados');
         return;
     }
     
@@ -143,6 +145,7 @@ async function buscarClienteNavbar() {
     `;
     
     try {
+        console.log('[Navbar Busqueda] Enviando petición a index.php?action=buscar_cliente_asesor');
         const response = await fetch('index.php?action=buscar_cliente_asesor', {
             method: 'POST',
             headers: {
@@ -154,15 +157,25 @@ async function buscarClienteNavbar() {
             })
         });
         
+        console.log('[Navbar Busqueda] Respuesta recibida, status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+        
         const data = await response.json();
+        console.log('[Navbar Busqueda] Datos recibidos:', data);
         
         if (data.success && data.clientes && data.clientes.length > 0) {
+            console.log('[Navbar Busqueda] Clientes encontrados:', data.clientes.length);
             let html = '';
             data.clientes.forEach(cliente => {
                 const clienteId = cliente.ID_CLIENTE || cliente.ID_COMERCIO || cliente.id;
                 const nombreCliente = cliente['NOMBRE CONTRATANTE'] || cliente.nombre || cliente.NOMBRE_CLIENTE || 'N/A';
                 const cc = cliente.IDENTIFICACION || cliente.cc || cliente.ID_CLIENTE || 'N/A';
                 const celular = cliente.CELULAR || cliente.CEL || cliente['TEL 1'] || cliente.cel || 'N/A';
+                
+                console.log('[Navbar Busqueda] Cliente encontrado:', { clienteId, nombreCliente, cc });
                 
                 html += `
                     <div style="padding: 15px; border-bottom: 1px solid #dee2e6; cursor: pointer; transition: background 0.2s;" 
@@ -181,22 +194,27 @@ async function buscarClienteNavbar() {
             });
             resultadosDiv.innerHTML = html;
         } else {
+            console.log('[Navbar Busqueda] No se encontraron clientes. Respuesta:', data);
+            let mensaje = 'No se encontraron clientes';
+            if (data.message) {
+                mensaje = data.message;
+            }
             resultadosDiv.innerHTML = `
                 <div style="padding: 20px; text-align: center; color: #dc3545;">
                     <i class="fas fa-exclamation-triangle"></i>
-                    <p>No se encontraron clientes</p>
+                    <p>${mensaje}</p>
                     <small>Verifique el CC o celular ingresado</small>
                 </div>
             `;
         }
         
     } catch (error) {
-        console.error('Error al buscar cliente:', error);
+        console.error('[Navbar Busqueda] Error al buscar cliente:', error);
         resultadosDiv.innerHTML = `
             <div style="padding: 20px; text-align: center; color: #dc3545;">
                 <i class="fas fa-exclamation-triangle"></i>
                 <p>Error al buscar cliente</p>
-                <small>Intente nuevamente</small>
+                <small>${error.message || 'Intente nuevamente'}</small>
             </div>
         `;
     }

@@ -346,7 +346,8 @@ class AsesorController {
             switch($criterio) {
                 case 'cc':
                 case 'identificacion':
-                    $where_clause = "AND c.cc = ?";
+                    // Usar CAST para comparar como string y evitar problemas de tipo
+                    $where_clause = "AND CAST(c.cc AS CHAR) = CAST(? AS CHAR)";
                     $params[] = $termino;
                     break;
                 case 'numero_factura':
@@ -356,7 +357,8 @@ class AsesorController {
                     break;
                 case 'mixto':
                 default:
-                    $where_clause = "AND (c.cc = ? OR c.nombre LIKE ? OR c.cel1 LIKE ? OR o.numero_obligacion = ?)";
+                    // Usar CAST para comparar CC como string y evitar problemas de tipo
+                    $where_clause = "AND (CAST(c.cc AS CHAR) = CAST(? AS CHAR) OR c.nombre LIKE ? OR CAST(c.cel1 AS CHAR) LIKE ? OR o.numero_obligacion = ?)";
                     $params[] = $termino;
                     $params[] = "%{$termino}%";
                     $params[] = "%{$termino}%";
