@@ -35,7 +35,7 @@ body {
     overflow-y: auto;
 }
 
-/* Sidebar común */
+/* Sidebar común - fijo al hacer scroll */
 .sidebar {
     width: 80px;
     background-color: var(--sidebar-color);
@@ -44,8 +44,12 @@ body {
     flex-direction: column;
     align-items: center;
     padding: 20px 0;
-    position: relative;
-    overflow: hidden;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1000;
+    overflow-x: hidden;
+    overflow-y: auto;
     flex-shrink: 0;
     height: 100vh;
 }
@@ -55,6 +59,16 @@ body {
     font-size: 24px;
     margin-bottom: 30px;
     font-weight: bold;
+}
+
+/* Logo imagen del sidebar (Navbar) */
+.sidebar-logo-img {
+    display: block;
+    max-width: 100%;
+    width: 76px;
+    height: auto;
+    margin: 4px auto -1px;
+    object-fit: contain;
 }
 
 .sidebar-nav ul {
@@ -132,9 +146,15 @@ body {
     overflow: hidden;
 }
 
+/* Contenido principal: margen para no quedar bajo el sidebar fijo */
+.main-content,
+.main-container,
+.gestion-container {
+    margin-left: 80px;
+}
+
 .main-content {
     flex: 1;
-    margin-left: 80px;
     padding: 0;
     overflow-y: auto;
     background-color: var(--background-color);
@@ -391,7 +411,9 @@ body {
         width: 60px;
     }
     
-    .main-content {
+    .main-content,
+    .main-container,
+    .gestion-container {
         margin-left: 60px;
     }
     

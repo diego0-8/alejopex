@@ -43,8 +43,8 @@ function cambiarTab(tabName) {
         case 'tareas':
             cargarTareas();
             break;
-        case 'historial':
-            cargarHistorial();
+        case 'habilitar':
+            cargarBasesDeshabilitadas();
             break;
     }
     
@@ -580,8 +580,8 @@ function mostrarBases(bases) {
                     <button class="btn btn-sm btn-primary" onclick="verClientesBase(${base.id}, '${base.nombre || ''}')" title="Ver Clientes">
                         <i class="fas fa-eye"></i>
                     </button>
-                    <button class="btn btn-sm btn-danger" onclick="eliminarBase(${base.id}, '${base.nombre || ''}')" title="Eliminar Base">
-                        <i class="fas fa-trash"></i>
+                    <button class="btn btn-sm btn-warning" onclick="deshabilitarBase(${base.id}, '${(base.nombre || '').replace(/'/g, "\\'")}')" title="Deshabilitar base">
+                        <i class="fas fa-ban"></i>
                     </button>
                 </div>
             </td>
@@ -1442,7 +1442,7 @@ function verClientesBase(baseId, baseNombre) {
     nombreElement.textContent = baseNombre;
     
     // Mostrar loading en el tbody (no en todo el modal body)
-    tbody.innerHTML = '<tr><td colspan="3" class="text-center"><i class="fas fa-spinner fa-spin"></i> Cargando clientes...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center"><i class="fas fa-spinner fa-spin"></i> Cargando clientes...</td></tr>';
     
     console.log('verClientesBase: Cargando clientes para base ID:', baseId);
     
@@ -1461,46 +1461,104 @@ function verClientesBase(baseId, baseNombre) {
             } else {
                 console.error('verClientesBase: Error del servidor:', data);
                 const errorMsg = data.message || data.error || 'Error desconocido al cargar clientes';
-                tbody.innerHTML = `<tr><td colspan="3" class="text-center alert alert-danger">Error: ${errorMsg}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center alert alert-danger">Error: ${errorMsg}</td></tr>`;
             }
         })
         .catch(error => {
             console.error('verClientesBase: Error al cargar clientes:', error);
             if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="3" class="text-center alert alert-danger">Error de conexión al cargar clientes</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center alert alert-danger">Error de conexión al cargar clientes</td></tr>';
             } else if (modalBody) {
                 modalBody.innerHTML = '<div class="alert alert-danger">Error de conexión al cargar clientes</div>';
             }
         });
 }
 
-function eliminarBase(baseId, baseNombre) {
-    console.log(`Coord_gestion.js: Eliminar base ID: ${baseId}`);
-    
-    if (!confirm(`¿Está seguro que desea eliminar la base "${baseNombre}"?\n\nEsta acción eliminará la base y todos los clientes asociados.\n\nEsta acción NO se puede deshacer.`)) {
+function deshabilitarBase(baseId, baseNombre) {
+    if (!confirm('¿Deshabilitar la base "' + (baseNombre || '') + '"?\n\nLos asesores dejarán de verla y no se podrá asignar. El historial y los reportes seguirán incluyendo sus datos. Puede volver a habilitarla en la pestaña "Habilitar".')) {
         return;
     }
-    
-    fetch(`index.php?action=eliminar_base`, {
+    fetch('index.php?action=deshabilitar_base', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `base_id=${baseId}`
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'base_id=' + encodeURIComponent(baseId)
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            mostrarNotificacion('success', 'Base eliminada exitosamente');
-            cargarBases(); // Recargar la lista de bases
+            mostrarNotificacion('success', data.message || 'Base deshabilitada');
+            cargarBases();
         } else {
-            mostrarError('Error al eliminar base: ' + (data.message || data.error));
+            mostrarNotificacion('error', data.message || 'Error al deshabilitar');
         }
     })
     .catch(error => {
-        console.error('Error al eliminar base:', error);
-        mostrarError('Error de conexión al eliminar base');
+        console.error('Error al deshabilitar base:', error);
+        mostrarNotificacion('error', 'Error de conexión');
     });
+}
+
+function cargarBasesDeshabilitadas() {
+    const tbody = document.getElementById('bases-deshabilitadas-tbody');
+    const vacio = document.getElementById('bases-deshabilitadas-vacio');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
+    if (vacio) vacio.style.display = 'none';
+    fetch('index.php?action=obtener_bases_deshabilitadas')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.data && data.data.length > 0) {
+                mostrarBasesDeshabilitadas(data.data);
+                if (vacio) vacio.style.display = 'none';
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center">No hay bases deshabilitadas.</td></tr>';
+                if (vacio) vacio.style.display = 'block';
+            }
+        })
+        .catch(() => {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center alert alert-danger">Error al cargar.</td></tr>';
+            if (vacio) vacio.style.display = 'none';
+        });
+}
+
+function mostrarBasesDeshabilitadas(bases) {
+    const tbody = document.getElementById('bases-deshabilitadas-tbody');
+    if (!tbody) return;
+    const fmt = (d) => d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-';
+    tbody.innerHTML = bases.map(b => `
+        <tr>
+            <td>${b.nombre || '-'}</td>
+            <td>${fmt(b.fecha_creacion)}</td>
+            <td>${b.total_clientes != null ? b.total_clientes : 0}</td>
+            <td>
+                <button type="button" class="btn btn-sm btn-success" onclick="habilitarBase(${b.id}, '${(b.nombre || '').replace(/'/g, "\\'")}')" title="Habilitar base">
+                    <i class="fas fa-check-circle"></i> Habilitar
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function habilitarBase(baseId, baseNombre) {
+    if (!confirm('¿Habilitar la base "' + (baseNombre || '') + '"?\n\nVolverá a estar activa y los asesores con acceso podrán verla.')) {
+        return;
+    }
+    fetch('index.php?action=habilitar_base', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'base_id=' + encodeURIComponent(baseId)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            mostrarNotificacion('success', data.message || 'Base habilitada');
+            cargarBasesDeshabilitadas();
+            if (typeof cargarBases === 'function') cargarBases();
+        } else {
+            mostrarNotificacion('error', data.message || 'Error al habilitar');
+        }
+    })
+    .catch(() => mostrarNotificacion('error', 'Error de conexión'));
 }
 
 function openModalAccesoBase(baseId, baseNombre) {
@@ -1944,10 +2002,12 @@ function cerrarModalVerAsesores() {
     document.getElementById('modal-ver-asesores-acceso').style.display = 'none';
 }
 
+// Lista completa de clientes del modal "Ver clientes" (para filtrar sin volver a pedir al servidor)
+let _clientesModalVerClientes = [];
+
 function mostrarClientesEnModal(clientes, baseNombre) {
     console.log('mostrarClientesEnModal: Mostrando clientes. Total:', clientes?.length || 0);
     
-    // Verificar que el tbody existe
     const tbody = document.getElementById('modal-clientes-tbody');
     if (!tbody) {
         console.error('mostrarClientesEnModal: Elemento modal-clientes-tbody no encontrado');
@@ -1958,44 +2018,131 @@ function mostrarClientesEnModal(clientes, baseNombre) {
         return;
     }
     
-    console.log('mostrarClientesEnModal: Tbody encontrado, actualizando contenido...');
+    _clientesModalVerClientes = clientes || [];
+    
+    // Limpiar búsqueda al cargar nueva lista
+    const inputBusqueda = document.getElementById('modal-ver-clientes-busqueda');
+    if (inputBusqueda) {
+        inputBusqueda.value = '';
+        inputBusqueda.removeEventListener('input', _filtrarClientesModalHandler);
+        inputBusqueda.addEventListener('input', _filtrarClientesModalHandler);
+    }
+    
+    _renderizarClientesEnModal(_clientesModalVerClientes);
+    
+    const totalElement = document.getElementById('modal-clientes-total');
+    if (totalElement) {
+        totalElement.textContent = _clientesModalVerClientes.length;
+    }
+}
+
+function _filtrarClientesModalHandler() {
+    const termino = (document.getElementById('modal-ver-clientes-busqueda')?.value || '').trim().toLowerCase();
+    if (!termino) {
+        _renderizarClientesEnModal(_clientesModalVerClientes);
+        const totalElement = document.getElementById('modal-clientes-total');
+        if (totalElement) totalElement.textContent = _clientesModalVerClientes.length;
+        return;
+    }
+    const filtrados = _clientesModalVerClientes.filter(cliente => {
+        const cc = String(cliente.IDENTIFICACION || cliente.cc || '').toLowerCase();
+        const nombre = String(cliente['NOMBRE CONTRATANTE'] || cliente.nombre || '').toLowerCase();
+        const cels = [cliente.CELULAR, cliente.cel1, cliente.cel2, cliente.cel3, cliente.cel4, cliente.cel5, cliente.cel6]
+            .filter(Boolean)
+            .map(c => String(c).toLowerCase());
+        const textoBusqueda = [cc, nombre, ...cels].join(' ');
+        return textoBusqueda.indexOf(termino) !== -1;
+    });
+    _renderizarClientesEnModal(filtrados);
+    const totalElement = document.getElementById('modal-clientes-total');
+    if (totalElement) {
+        totalElement.textContent = _clientesModalVerClientes.length !== filtrados.length
+            ? (filtrados.length + ' de ' + _clientesModalVerClientes.length)
+            : filtrados.length;
+    }
+}
+
+function _renderizarClientesEnModal(clientes) {
+    const tbody = document.getElementById('modal-clientes-tbody');
+    if (!tbody) return;
     
     if (!clientes || clientes.length === 0) {
-        console.log('mostrarClientesEnModal: No hay clientes para mostrar');
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="3" class="text-center">No hay clientes en esta base</td>
-            </tr>
-        `;
-        
-        // Actualizar contador
-        const totalElement = document.getElementById('modal-clientes-total');
-        if (totalElement) {
-            totalElement.textContent = '0';
-        }
+        const msg = _clientesModalVerClientes.length === 0 ? 'No hay clientes en esta base' : 'No hay clientes que coincidan con la búsqueda';
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center">${msg}</td></tr>`;
         return;
     }
     
-    // Crear filas de clientes
-    console.log('mostrarClientesEnModal: Creando filas para', clientes.length, 'clientes');
-    tbody.innerHTML = clientes.map(cliente => `
-        <tr>
+    const idCliente = (c) => c.id != null ? c.id : (c.ID_CLIENTE != null ? c.ID_CLIENTE : c.ID_COMERCIO);
+    tbody.innerHTML = clientes.map(cliente => {
+        const id = idCliente(cliente);
+        return `<tr>
             <td>${cliente.IDENTIFICACION || cliente.cc || '-'}</td>
             <td>${cliente['NOMBRE CONTRATANTE'] || cliente.nombre || '-'}</td>
             <td>${cliente.CELULAR || cliente.cel1 || '-'}</td>
-        </tr>
-    `).join('');
-    
-    // Actualizar contador
-    const totalElement = document.getElementById('modal-clientes-total');
-    if (totalElement) {
-        totalElement.textContent = clientes.length;
-        console.log('mostrarClientesEnModal: Contador actualizado a', clientes.length);
-    } else {
-        console.warn('mostrarClientesEnModal: Elemento modal-clientes-total no encontrado');
-    }
-    
-    console.log('mostrarClientesEnModal: Proceso completado');
+            <td><button type="button" class="btn btn-sm btn-outline-primary" onclick="verDetalleClienteModal(${id})" title="Ver detalle"><i class="fas fa-eye"></i></button></td>
+        </tr>`;
+    }).join('');
+}
+
+function verDetalleClienteModal(clienteId) {
+    const modal = document.getElementById('modal-detalle-cliente');
+    const loading = document.getElementById('modal-detalle-cliente-loading');
+    const content = document.getElementById('modal-detalle-cliente-content');
+    if (!modal || !loading || !content) return;
+    modal.style.display = 'flex';
+    loading.style.display = 'block';
+    content.style.display = 'none';
+    fetch(`index.php?action=detalle_cliente_coordinador&cliente_id=${encodeURIComponent(clienteId)}`)
+        .then(r => r.json())
+        .then(data => {
+            loading.style.display = 'none';
+            content.style.display = 'block';
+            if (!data.success || !data.cliente) {
+                content.innerHTML = '<div class="alert alert-danger">' + (data.message || 'Error al cargar el cliente') + '</div>';
+                return;
+            }
+            const c = data.cliente;
+            document.getElementById('detalle-cliente-cc').textContent = c.cc || '-';
+            document.getElementById('detalle-cliente-nombre').textContent = c.nombre || '-';
+            document.getElementById('detalle-cliente-barrio').textContent = (c.barrio || c.direccion || '').trim() || '-';
+            document.getElementById('detalle-cliente-email').textContent = (c.email || '').trim() || '-';
+            const tels = [c.cel1, c.cel2, c.cel3, c.cel4, c.cel5, c.cel6].filter(Boolean);
+            const telContainer = document.getElementById('detalle-cliente-telefonos');
+            if (tels.length === 0) {
+                telContainer.innerHTML = '<span style="color: #666;">-</span>';
+            } else {
+                telContainer.innerHTML = tels.map(t => `<span style="padding: 4px 10px; background: #e9ecef; border-radius: 4px;">${t}</span>`).join('');
+            }
+            const tbody = document.getElementById('detalle-cliente-obligaciones-tbody');
+            const sinObl = document.getElementById('detalle-cliente-sin-obligaciones');
+            if (!data.obligaciones || data.obligaciones.length === 0) {
+                tbody.innerHTML = '';
+                sinObl.style.display = 'block';
+            } else {
+                sinObl.style.display = 'none';
+                const fmtNum = (n) => (n != null && n !== '') ? Number(n).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '-';
+                tbody.innerHTML = data.obligaciones.map(ob => `
+                    <tr>
+                        <td>${ob.numero_obligacion || '-'}</td>
+                        <td>${ob.producto || '-'}</td>
+                        <td>${fmtNum(ob.saldo_capital)}</td>
+                        <td>${fmtNum(ob.saldo_total)}</td>
+                        <td>${ob.dias_mora != null ? ob.dias_mora : '-'}</td>
+                        <td>${ob.estado || '-'}</td>
+                    </tr>
+                `).join('');
+            }
+        })
+        .catch(err => {
+            loading.style.display = 'none';
+            content.style.display = 'block';
+            content.innerHTML = '<div class="alert alert-danger">Error de conexión al cargar el detalle.</div>';
+        });
+}
+
+function closeModalDetalleCliente() {
+    const modal = document.getElementById('modal-detalle-cliente');
+    if (modal) modal.style.display = 'none';
 }
 
 // Funciones verDetalleTarea y completarTarea eliminadas - ya no se usan en la nueva estructura

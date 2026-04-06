@@ -46,32 +46,36 @@ class HybridUpdater {
     }
 
     setupEventListeners() {
-        // Interceptar fetch para detectar acciones importantes
-        const originalFetch = window.fetch;
+        // Evitar registrar listeners más de una vez (previene "content script already exists")
+        if (this._listenersSetup) return;
+        this._listenersSetup = true;
+
+        // Guardar referencia al fetch nativo solo la primera vez (evita doble wrap)
+        if (!this._originalFetch) {
+            this._originalFetch = window.fetch;
+        }
         const self = this;
-        
+        const originalFetch = this._originalFetch;
+
         window.fetch = async function(...args) {
             const response = await originalFetch.apply(this, args);
-            
-            // Si es una acción que requiere actualización inmediata
+
             if (self.shouldUpdateImmediately(args[0])) {
                 console.log('HybridUpdater: Acción detectada, actualizando inmediatamente...');
-                setTimeout(() => self.forceUpdate(), 1500); // Esperar 1.5s para que se complete la acción
+                setTimeout(() => self.forceUpdate(), 1500);
             }
-            
+
             return response;
         };
 
-        // Escuchar cambios de pestañas para actualizar contenido
         document.addEventListener('click', (event) => {
             if (event.target.classList.contains('tab-btn')) {
                 setTimeout(() => self.forceUpdate(), 500);
             }
         });
 
-        // Escuchar eventos de formulario
         document.addEventListener('submit', (event) => {
-            if (event.target.classList.contains('upload-form') || 
+            if (event.target.classList.contains('upload-form') ||
                 event.target.classList.contains('assignment-form')) {
                 setTimeout(() => self.forceUpdate(), 2000);
             }
@@ -177,31 +181,50 @@ class HybridUpdater {
     }
 }
 
-// Instancia global
-window.hybridUpdater = new HybridUpdater();
+// Evitar doble carga en el mismo contexto (previene "content script already exists in this context")
+if (typeof window.__hybridUpdaterLoaded__ !== 'undefined' && window.__hybridUpdaterLoaded__) {
+    console.log('HybridUpdater: Ya cargado en este contexto, omitiendo inicialización.');
+} else {
+    window.__hybridUpdaterLoaded__ = true;
 
-    // Inicializar cuando se carga la página
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('HybridUpdater: DOM cargado, iniciando sistema...');
-    window.hybridUpdater.start();
-    
-    // Configurar callbacks específicos según el rol del usuario
-    setupRoleSpecificCallbacks();
-});
+    window.hybridUpdater = new HybridUpdater();
 
-// Limpiar al salir de la página
-window.addEventListener('beforeunload', () => {
-    if (window.hybridUpdater) {
-        window.hybridUpdater.stop();
+    function initHybridUpdater() {
+        if (window.hybridUpdater._initialized) return;
+        const href = typeof window.location !== 'undefined' ? window.location.href : '';
+        // Vista de gestión: no polling ni monkey-patch de fetch (misma pestaña hace muchas peticiones AJAX)
+        if (href.indexOf('action=asesor_gestionar') !== -1) {
+            window.hybridUpdater._initialized = true;
+            console.log('HybridUpdater: omitido en asesor_gestionar (menos carga).');
+            return;
+        }
+        window.hybridUpdater._initialized = true;
+        console.log('HybridUpdater: DOM cargado, iniciando sistema...');
+        window.hybridUpdater.start();
+        setupRoleSpecificCallbacks();
     }
-});
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initHybridUpdater);
+    } else {
+        initHybridUpdater();
+    }
+
+    window.addEventListener('beforeunload', () => {
+        if (window.hybridUpdater) {
+            window.hybridUpdater.stop();
+        }
+    });
+}
 
 // Configurar callbacks específicos según el rol del usuario
 function setupRoleSpecificCallbacks() {
+    if (!window.hybridUpdater) return;
+    if (window.hybridUpdater._callbacksConfigured) return;
+    window.hybridUpdater._callbacksConfigured = true;
+
     console.log('HybridUpdater: Configurando callbacks específicos del rol...');
-    
-    // Detectar el rol del usuario basado en la URL o elementos de la página
-    const currentPath = window.location.pathname;
+
     const currentUrl = window.location.href;
     
     // Callbacks para coordinador

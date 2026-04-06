@@ -6,6 +6,32 @@ let clienteId = null;
 let clienteData = null;
 let inicioGestion = null; // Registro de inicio de gestión
 let sesionIdGestion = null; // ID de sesión para esta gestión
+/** Evita doble envío por doble clic o clics rápidos (insertaba 2–3 gestiones idénticas). */
+let guardandoGestionEnCurso = false;
+
+function obtenerBtnGuardarGestion() {
+    return document.getElementById('btn-guardar-gestion');
+}
+
+/**
+ * Vuelve a mostrar «Guardar gestión» sin recargar la página (tras una gestión ya guardada).
+ * Reinicia el contador de tiempo de gestión para el siguiente registro.
+ */
+function prepararNuevaGestion() {
+    guardandoGestionEnCurso = false;
+    const btn = obtenerBtnGuardarGestion();
+    if (btn) {
+        btn.disabled = false;
+        btn.classList.remove('is-loading');
+    }
+    const ini = document.getElementById('botones-iniciales');
+    const desp = document.getElementById('botones-despues-guardar');
+    if (ini) ini.style.display = 'flex';
+    if (desp) desp.style.display = 'none';
+    inicioGestion = new Date();
+    sesionIdGestion = null;
+    iniciarGestionCliente();
+}
 
 // Inicializar la vista cuando se carga la página
 document.addEventListener('DOMContentLoaded', function() {
@@ -23,28 +49,38 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('Asesor_gestionar.js: Cargando datos del cliente:', clienteId);
     
-    // Registrar inicio de gestión del cliente
-    iniciarGestionCliente();
-    
-    // Cargar datos del cliente
-    cargarDatosCliente();
-    
-    // Cargar contratos
-    cargarContratos();
-    
-    // Cargar historial
-    cargarHistorial();
+    // Cargar datos del cliente primero (valida acceso). Obligaciones e historial en paralelo.
+    cargarDatosCliente()
+        .then((ok) => {
+            if (!ok) return;
+            iniciarGestionCliente();
+            Promise.all([cargarContratos(), cargarHistorial()]).catch(function (e) {
+                console.error('Asesor_gestionar.js: Error en carga paralela obligaciones/historial:', e);
+            });
+        })
+        .catch((e) => {
+            console.error('Asesor_gestionar.js: Error inesperado inicializando:', e);
+        });
 });
 
 // ========================================
 // CARGA DE DATOS REALES
 // ========================================
 
+function manejarSinAccesoCliente(mensaje) {
+    const msg = mensaje || 'No tiene acceso a este cliente.';
+    mostrarError(msg);
+    // Redirigir al dashboard para evitar que quede la vista "rota"
+    setTimeout(() => {
+        window.location.href = 'index.php?action=asesor_dashboard#tab-clientes';
+    }, 1200);
+}
+
 function cargarDatosCliente() {
     console.log('Asesor_gestionar.js: Cargando datos del cliente:', clienteId);
     
     // Hacer petición AJAX para obtener datos reales
-    fetch(`index.php?action=obtener_datos_cliente&cliente_id=${clienteId}`)
+    return fetch(`index.php?action=obtener_datos_cliente&cliente_id=${clienteId}`)
         .then(response => {
             console.log('Asesor_gestionar.js: Respuesta recibida:', response.status, response.statusText);
             
@@ -70,7 +106,7 @@ function cargarDatosCliente() {
                 document.getElementById('cliente-nombre-completo').textContent = datosCliente.nombre || 'N/A';
                 document.getElementById('cliente-cedula').textContent = datosCliente.cc || datosCliente.identificacion || 'N/A';
                 
-                // Configurar teléfonos con validación (cel1 a cel6)
+                // Configurar teléfonos con validación (cel1 a cel10)
                 configurarTelefonos(datosCliente);
                 
                 // Configurar email (solo mostrar si existe)
@@ -78,22 +114,29 @@ function cargarDatosCliente() {
                 
                 clienteData = datosCliente;
                 console.log('Asesor_gestionar.js: Datos del cliente cargados exitosamente');
+                return true;
             } else {
                 console.error('Asesor_gestionar.js: Error al cargar datos:', data.message);
+                const mensaje = (data.message || '').toString();
+                if (mensaje.toLowerCase().includes('no tiene acceso')) {
+                    manejarSinAccesoCliente('No tiene acceso a este cliente (posiblemente la tarea/base fue removida).');
+                    return false;
+                }
                 mostrarError('Error al cargar datos del cliente: ' + data.message);
+                return false;
             }
         })
         .catch(error => {
             console.error('Asesor_gestionar.js: Error en la petición:', error);
             mostrarError('Error de conexión al cargar datos del cliente: ' + error.message);
+            return false;
         });
 }
 
 function cargarContratos() {
     console.log('Asesor_gestionar.js: Cargando contratos del cliente:', clienteId);
     
-    // Hacer petición AJAX para obtener contratos reales
-    fetch(`index.php?action=obtener_contratos_cliente&cliente_id=${clienteId}`)
+    return fetch(`index.php?action=obtener_contratos_cliente&cliente_id=${clienteId}`)
         .then(response => {
             console.log('Asesor_gestionar.js: Respuesta de contratos recibida:', response.status, response.statusText);
             
@@ -366,9 +409,9 @@ function configurarTelefonos(datosCliente) {
         return;
     }
     
-    // Extraer celulares del cliente (cel1 a cel6)
+    // Extraer celulares del cliente (cel1 a cel10)
     let celulares = [];
-    for (let i = 1; i <= 6; i++) {
+    for (let i = 1; i <= 10; i++) {
         const celular = datosCliente[`cel${i}`];
         if (celular && celular.trim() !== '' && celular !== '0' && celular !== 'NULL' && celular !== 'null') {
             celulares.push({
@@ -634,8 +677,7 @@ function formatearFecha(fecha) {
 function cargarHistorial() {
     console.log('Asesor_gestionar.js: Cargando historial del cliente:', clienteId);
     
-    // Hacer petición AJAX para obtener historial
-    fetch(`index.php?action=obtener_historial_gestiones&cliente_id=${clienteId}`)
+    return fetch(`index.php?action=obtener_historial_gestiones&cliente_id=${clienteId}`)
         .then(response => {
             console.log('Asesor_gestionar.js: Respuesta de historial recibida:', response.status, response.statusText);
             
@@ -689,6 +731,8 @@ function mostrarHistorial(gestiones) {
         const nivel2 = obtenerNivel2(gestion); // Solo mostrar nivel 2
         const canalesAuth = obtenerCanalesAutorizados(gestion);
         const asesor = gestion.asesor_nombre || 'Asesor no identificado';
+        const baseNombre = gestion.base_nombre || 'Base sin nombre';
+        const telefono = gestion.telefono_contacto || '';
         
         html += `
             <div class="historial-item">
@@ -700,12 +744,18 @@ function mostrarHistorial(gestiones) {
                         <span style="background: #6c757d; color: white; padding: 5px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; display: inline-block;">
                             <i class="fas fa-user"></i> Asesor: ${asesor}
                         </span>
+                        <div>
+                            <span class="historial-base-badge">
+                                <i class="fas fa-database"></i> ${baseNombre}
+                            </span>
+                        </div>
                     </div>
                 </div>
                 <div class="historial-detalle">
                     <div class="detalle-columna">
                         <p><strong>Canal:</strong> ${canal}</p>
                         <p><strong>Tipificación:</strong> ${nivel2}</p>
+                        ${telefono ? `<p><strong>Teléfono de contacto:</strong> ${telefono}</p>` : ''}
                         ${gestion.fecha_pago ? `<p><strong>Fecha de Pago:</strong> ${new Date(gestion.fecha_pago).toLocaleDateString('es-CO')}</p>` : ''}
                         ${gestion.valor_pago ? `<p><strong>Valor de Pago:</strong> $${parseFloat(gestion.valor_pago).toLocaleString('es-CO')}</p>` : ''}
                     </div>
@@ -914,6 +964,7 @@ function guardarGestion() {
     const nivel2 = document.getElementById('tipo-contacto-nivel2').value;
     const nivel3 = document.getElementById('tipo-contacto-nivel3').value;
     const observaciones = document.getElementById('observaciones-texto').value;
+    const telefonoSeleccionado = document.getElementById('telefono-select')?.value || null;
     
     // Obtener fecha y valor si corresponde (solo para ACUERDO DE PAGO)
     let fechaPago = null;
@@ -928,6 +979,39 @@ function guardarGestion() {
             // Remover el símbolo $ y los separadores de miles, luego convertir a número
             const valorLimpio = valorPagoInput.value.replace(/[^\d]/g, '');
             valorPago = valorLimpio ? parseFloat(valorLimpio) : null;
+        }
+    }
+
+    // Validaciones de campos obligatorios (excepto obligación)
+    if (!canalContacto || canalContacto.trim() === '') {
+        alert('Por favor seleccione el Canal de Contacto.');
+        return;
+    }
+    if (!nivel1 || nivel1.trim() === '') {
+        alert('Por favor seleccione el Tipo de Contacto (Nivel 1).');
+        return;
+    }
+    if (!nivel2 || nivel2.trim() === '') {
+        alert('Por favor seleccione la Clasificación (Nivel 2).');
+        return;
+    }
+    if (!nivel3 || nivel3.trim() === '') {
+        alert('Por favor seleccione el Detalle (Nivel 3).');
+        return;
+    }
+    if (!observaciones || observaciones.trim() === '') {
+        alert('Por favor diligencie las Observaciones.');
+        return;
+    }
+    // Validar fecha y valor de pago cuando aplica acuerdo de pago
+    if (nivel2 === '1.1' || nivel2 === 'ws_1.1' || nivel2 === 'rc_1.1') {
+        if (!fechaPago) {
+            alert('Por favor seleccione la Fecha de Pago para el acuerdo.');
+            return;
+        }
+        if (valorPago === null) {
+            alert('Por favor diligencie el Valor de Pago para el acuerdo.');
+            return;
         }
     }
     
@@ -1005,6 +1089,7 @@ function guardarGestion() {
         nivel2_clasificacion: nivel2 || null,
         nivel3_detalle: nivel3 || null,
         observaciones: observaciones || null,
+        telefono_contacto: telefonoSeleccionado || null,
         canales: canales,
         duracion_segundos: duracionSegundos,
         fecha_pago: fechaPago || null,
@@ -1025,10 +1110,36 @@ function guardarGestion() {
 
 // Función para guardar gestión de múltiples facturas
 function guardarGestionMultiplesFacturas(facturasIds, canalContacto, nivel1, nivel2, nivel3, observaciones) {
-    // Validar campos obligatorios
-    if (!nivel1) {
-        alert('Por favor seleccione el Tipo de Contacto (Nivel 1)');
+    // Validar campos obligatorios (excepto obligación)
+    if (!canalContacto || canalContacto.trim() === '') {
+        alert('Por favor seleccione el Canal de Contacto.');
         return;
+    }
+    if (!nivel1 || nivel1.trim() === '') {
+        alert('Por favor seleccione el Tipo de Contacto (Nivel 1).');
+        return;
+    }
+    if (!nivel2 || nivel2.trim() === '') {
+        alert('Por favor seleccione la Clasificación (Nivel 2).');
+        return;
+    }
+    if (!nivel3 || nivel3.trim() === '') {
+        alert('Por favor seleccione el Detalle (Nivel 3).');
+        return;
+    }
+    if (!observaciones || observaciones.trim() === '') {
+        alert('Por favor diligencie las Observaciones.');
+        return;
+    }
+
+    if (guardandoGestionEnCurso) {
+        return;
+    }
+    guardandoGestionEnCurso = true;
+    const btnGuardarMult = obtenerBtnGuardarGestion();
+    if (btnGuardarMult) {
+        btnGuardarMult.disabled = true;
+        btnGuardarMult.classList.add('is-loading');
     }
     
     // Obtener canales de comunicación autorizados
@@ -1040,6 +1151,7 @@ function guardarGestionMultiplesFacturas(facturasIds, canalContacto, nivel1, niv
         correo: document.getElementById('canal-correo')?.checked || false,
         mensajeria: document.getElementById('canal-mensajeria')?.checked || false
     };
+    const telefonoSeleccionado = document.getElementById('telefono-select')?.value || null;
     
     // Calcular duración de la gestión
     let duracionSegundos = 0;
@@ -1050,13 +1162,18 @@ function guardarGestionMultiplesFacturas(facturasIds, canalContacto, nivel1, niv
     }
     
     // Confirmar con el usuario
-    const confirmacion = confirm(`¿Desea tipificar todas las ${facturasIds.length} factura(s) con los mismos datos?`);
+    const confirmacion = confirm(`¿Desea tipificar todas las ${facturasIds.length} obligación(es) con los mismos datos?\n\n(Se creará un registro por cada obligación; no está relacionado con la cantidad de teléfonos.)`);
     if (!confirmacion) {
+        guardandoGestionEnCurso = false;
+        if (btnGuardarMult) {
+            btnGuardarMult.disabled = false;
+            btnGuardarMult.classList.remove('is-loading');
+        }
         return;
     }
     
     // Mostrar mensaje de progreso
-    alert(`Guardando gestión para ${facturasIds.length} factura(s). Por favor espere...`);
+    alert(`Guardando gestión para ${facturasIds.length} obligación(es). Por favor espere...`);
     
     // Obtener fecha y valor si corresponde
     let fechaPago = null;
@@ -1081,6 +1198,7 @@ function guardarGestionMultiplesFacturas(facturasIds, canalContacto, nivel1, niv
         nivel2_clasificacion: nivel2 || null,
         nivel3_detalle: nivel3 || null,
         observaciones: observaciones || null,
+        telefono_contacto: telefonoSeleccionado || null,
         canales: canales,
         duracion_segundos: duracionSegundos,
         fecha_pago: fechaPago || null,
@@ -1091,7 +1209,7 @@ function guardarGestionMultiplesFacturas(facturasIds, canalContacto, nivel1, niv
     let gestionesGuardadas = 0;
     let gestionesError = 0;
     const totalGestiones = facturasIds.length;
-    
+
     // Usar Promise.all para enviar todas las gestiones
     const promesas = facturasIds.map(facturaId => {
         const datosGestion = {
@@ -1149,11 +1267,29 @@ function guardarGestionMultiplesFacturas(facturasIds, canalContacto, nivel1, niv
         .catch(error => {
             console.error('Error al guardar gestiones múltiples:', error);
             alert('Error al guardar algunas gestiones. Por favor revise el historial.');
+        })
+        .finally(() => {
+            guardandoGestionEnCurso = false;
+            if (btnGuardarMult) {
+                btnGuardarMult.disabled = false;
+                btnGuardarMult.classList.remove('is-loading');
+            }
         });
 }
 
 // Función auxiliar para enviar una gestión individual
 function enviarGestion(clienteId, datosGestion) {
+    if (guardandoGestionEnCurso) {
+        console.warn('Asesor_gestionar.js: Guardado ya en curso, se ignora envío duplicado');
+        return;
+    }
+    guardandoGestionEnCurso = true;
+    const btnGuardar = obtenerBtnGuardarGestion();
+    if (btnGuardar) {
+        btnGuardar.disabled = true;
+        btnGuardar.classList.add('is-loading');
+    }
+
     fetch('index.php?action=guardar_gestion', {
         method: 'POST',
         headers: {
@@ -1188,6 +1324,13 @@ function enviarGestion(clienteId, datosGestion) {
     .catch(error => {
         console.error('Error al guardar gestión:', error);
         alert('Error al conectar con el servidor');
+    })
+    .finally(() => {
+        guardandoGestionEnCurso = false;
+        if (btnGuardar) {
+            btnGuardar.disabled = false;
+            btnGuardar.classList.remove('is-loading');
+        }
     });
 }
 
@@ -1728,7 +1871,13 @@ function guardarNuevaInformacion() {
                 cargarContratos();
             }
         } else {
-            alert('Error al actualizar: ' + data.message);
+            const msg = (data && data.message) ? String(data.message) : 'Error desconocido';
+            // Si el backend indica falta de cupos, mostrar exactamente el mensaje solicitado (sin prefijo)
+            if (msg.toLowerCase().includes('contacta al administrador para agregar más números')) {
+                alert('Contacta al administrador para agregar más números');
+            } else {
+                alert('Error al actualizar: ' + msg);
+            }
         }
     })
     .catch(error => {
@@ -1805,274 +1954,6 @@ function finalizarGestionCliente() {
 }
 
 // ========================================
-// FUNCIÓN PARA CAMBIAR DE CLIENTE SIN RECARGAR
-// Similar al sistema de pestañas del coordinador
+// NOTA: Las funciones para cambiar cliente sin recargar han sido eliminadas
+// Ahora la página se recarga completamente al cambiar de cliente
 // ========================================
-
-/**
- * Cambiar de cliente sin recargar la página completa
- * Esto evita que se caiga la llamada del softphone WebRTC
- * @param {string} nuevoClienteId - ID del nuevo cliente a cargar
- */
-function cambiarClienteSinRecargar(nuevoClienteId) {
-    console.log('Asesor_gestionar.js: Cambiando de cliente sin recargar:', nuevoClienteId);
-    
-    if (!nuevoClienteId) {
-        console.error('Asesor_gestionar.js: No se proporcionó ID del cliente');
-        return;
-    }
-    
-    // Si es el mismo cliente, no hacer nada
-    if (clienteId === nuevoClienteId) {
-        console.log('Asesor_gestionar.js: Ya se está mostrando este cliente');
-        return;
-    }
-    
-    // Mostrar indicador de carga
-    mostrarIndicadorCarga();
-    
-    // Limpiar formularios y datos anteriores
-    limpiarFormularios();
-    
-    // Actualizar el ID del cliente
-    clienteId = nuevoClienteId;
-    
-    // Actualizar URL sin recargar (para mantener la navegación correcta)
-    const nuevaUrl = `index.php?action=asesor_gestionar&cliente_id=${nuevoClienteId}`;
-    window.history.pushState({ cliente_id: nuevoClienteId }, '', nuevaUrl);
-    
-    // Reiniciar gestión del nuevo cliente
-    iniciarGestionCliente();
-    
-    // Cargar todos los datos del nuevo cliente
-    // Usar un pequeño delay para asegurar que las funciones se ejecuten correctamente
-    setTimeout(() => {
-        // Cargar datos en paralelo
-        const promesas = [];
-        
-        // Cargar datos del cliente
-        promesas.push(
-            fetch(`index.php?action=obtener_datos_cliente&cliente_id=${nuevoClienteId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.cliente) {
-                        const datosCliente = data.cliente;
-                        document.getElementById('cliente-nombre-completo').textContent = datosCliente.nombre || 'N/A';
-                        document.getElementById('cliente-cedula').textContent = datosCliente.cc || datosCliente.identificacion || 'N/A';
-                        configurarTelefonos(datosCliente);
-                        configurarEmail(datosCliente);
-                        clienteData = datosCliente;
-                    }
-                })
-        );
-        
-        // Cargar contratos
-        promesas.push(
-            fetch(`index.php?action=obtener_contratos_cliente&cliente_id=${nuevoClienteId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        let obligacionesData = [];
-                        if (data.obligaciones && Array.isArray(data.obligaciones)) {
-                            obligacionesData = data.obligaciones;
-                        } else if (data.facturas && Array.isArray(data.facturas)) {
-                            obligacionesData = data.facturas;
-                        } else if (data.contratos && Array.isArray(data.contratos)) {
-                            obligacionesData = data.contratos;
-                        }
-                        mostrarContratos(obligacionesData);
-                    }
-                })
-        );
-        
-        // Cargar historial
-        promesas.push(
-            fetch(`index.php?action=obtener_historial_gestiones&cliente_id=${nuevoClienteId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        mostrarHistorial(data.gestiones || []);
-                    }
-                })
-        );
-        
-        // Esperar a que todas las cargas se completen
-        Promise.all(promesas)
-            .then(() => {
-                console.log('Asesor_gestionar.js: Cliente cambiado exitosamente sin recargar');
-                ocultarIndicadorCarga();
-            })
-            .catch(error => {
-                console.error('Asesor_gestionar.js: Error al cargar datos del nuevo cliente:', error);
-                ocultarIndicadorCarga();
-                mostrarError('Error al cargar datos del cliente. Por favor, recarga la página.');
-            });
-    }, 100);
-}
-
-/**
- * Limpiar formularios y datos cuando se cambia de cliente
- */
-function limpiarFormularios() {
-    console.log('Asesor_gestionar.js: Limpiando formularios...');
-    
-    // Limpiar datos del cliente anterior
-    clienteData = null;
-    
-    // Limpiar información del cliente en la UI
-    const nombreCompleto = document.getElementById('cliente-nombre-completo');
-    const cedula = document.getElementById('cliente-cedula');
-    const telefonos = document.getElementById('telefonos-cliente');
-    const email = document.getElementById('cliente-email');
-    
-    if (nombreCompleto) nombreCompleto.textContent = 'Cargando...';
-    if (cedula) cedula.textContent = 'Cargando...';
-    if (telefonos) telefonos.innerHTML = '<span>Cargando...</span>';
-    if (email) email.textContent = '-';
-    
-    // Limpiar selector de contratos
-    const selectContratos = document.getElementById('contrato-gestionar');
-    if (selectContratos) {
-        selectContratos.innerHTML = '<option value="">Selecciona una factura (opcional)</option><option value="ninguna">Ninguna (Cliente no quiso pagar ninguna)</option>';
-    }
-    
-    // Ocultar opciones de todas las facturas
-    const opcionesTodas = document.getElementById('opciones-todas-facturas');
-    if (opcionesTodas) {
-        opcionesTodas.style.display = 'none';
-    }
-    
-    // Limpiar selectores de tipificación
-    const tipoContacto1 = document.getElementById('tipo-contacto-nivel1');
-    const tipoContacto2 = document.getElementById('tipo-contacto-nivel2');
-    const tipoContacto3 = document.getElementById('tipo-contacto-nivel3');
-    
-    if (tipoContacto1) {
-        tipoContacto1.value = '';
-        tipoContacto1.dispatchEvent(new Event('change'));
-    }
-    if (tipoContacto2) {
-        tipoContacto2.innerHTML = '<option value="">Primero selecciona el Nivel 1</option>';
-        const container2 = document.getElementById('nivel2-container');
-        if (container2) container2.style.display = 'none';
-    }
-    if (tipoContacto3) {
-        tipoContacto3.innerHTML = '<option value="">Primero selecciona el Nivel 2</option>';
-        const container3 = document.getElementById('nivel3-container');
-        if (container3) container3.style.display = 'none';
-    }
-    
-    // Limpiar campos de fecha y valor
-    const fechaPago = document.getElementById('fecha-pago');
-    const valorPago = document.getElementById('valor-pago');
-    const camposFechaValor = document.getElementById('campos-fecha-valor');
-    
-    if (fechaPago) fechaPago.value = '';
-    if (valorPago) valorPago.value = '';
-    if (camposFechaValor) camposFechaValor.style.display = 'none';
-    
-    // Limpiar observaciones
-    const observaciones = document.getElementById('observaciones-texto');
-    if (observaciones) observaciones.value = '';
-    
-    // Limpiar canales de comunicación
-    const canales = ['canal-llamada', 'canal-whatsapp', 'canal-email', 'canal-sms', 'canal-correo', 'canal-mensajeria'];
-    canales.forEach(canalId => {
-        const checkbox = document.getElementById(canalId);
-        if (checkbox) checkbox.checked = false;
-    });
-    
-    // Limpiar contenedor de contratos
-    const contratosContainer = document.getElementById('contratos-container');
-    if (contratosContainer) {
-        contratosContainer.innerHTML = `
-            <div class="cargando-contratos">
-                <i class="fas fa-spinner fa-spin"></i>
-                <p>Cargando obligaciones...</p>
-            </div>
-        `;
-    }
-    
-    // Limpiar historial
-    const historialContainer = document.getElementById('historial-container');
-    if (historialContainer) {
-        historialContainer.innerHTML = `
-            <div class="historial-vacio">
-                <i class="fas fa-spinner fa-spin"></i>
-                <p>Cargando historial...</p>
-            </div>
-        `;
-    }
-    
-    // Restaurar botones iniciales
-    const botonesIniciales = document.getElementById('botones-iniciales');
-    const botonesDespuesGuardar = document.getElementById('botones-despues-guardar');
-    if (botonesIniciales) botonesIniciales.style.display = 'flex';
-    if (botonesDespuesGuardar) botonesDespuesGuardar.style.display = 'none';
-    
-    console.log('Asesor_gestionar.js: Formularios limpiados');
-}
-
-/**
- * Mostrar indicador de carga mientras se cambia de cliente
- */
-function mostrarIndicadorCarga() {
-    // Crear o mostrar overlay de carga
-    let overlay = document.getElementById('cambio-cliente-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'cambio-cliente-overlay';
-        overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 10005;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            gap: 20px;
-        `;
-        overlay.innerHTML = `
-            <div style="background: white; padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-                <i class="fas fa-spinner fa-spin" style="font-size: 48px; color: #007bff; margin-bottom: 15px;"></i>
-                <h3 style="margin: 0; color: #333;">Cargando cliente...</h3>
-                <p style="margin: 10px 0 0 0; color: #666;">Por favor espera, no se perderá tu llamada</p>
-            </div>
-        `;
-        document.body.appendChild(overlay);
-    } else {
-        overlay.style.display = 'flex';
-    }
-}
-
-/**
- * Ocultar indicador de carga
- */
-function ocultarIndicadorCarga() {
-    const overlay = document.getElementById('cambio-cliente-overlay');
-    if (overlay) {
-        overlay.style.display = 'none';
-    }
-}
-
-// Hacer la función disponible globalmente para que pueda ser llamada desde navbar-busqueda-cliente.js
-window.cambiarClienteSinRecargar = cambiarClienteSinRecargar;
-
-// Manejar el evento popstate (cuando el usuario usa botón atrás/adelante del navegador)
-window.addEventListener('popstate', function(event) {
-    console.log('Asesor_gestionar.js: Evento popstate detectado');
-    
-    // Obtener cliente_id de la URL actual
-    const urlParams = new URLSearchParams(window.location.search);
-    const nuevoClienteId = urlParams.get('cliente_id');
-    
-    // Si hay un cliente_id en la URL y es diferente al actual, cargarlo sin recargar
-    if (nuevoClienteId && nuevoClienteId !== clienteId) {
-        console.log('Asesor_gestionar.js: Cambiando cliente desde popstate:', nuevoClienteId);
-        cambiarClienteSinRecargar(nuevoClienteId);
-    }
-});

@@ -2,10 +2,11 @@
    ESTILOS PARA VISTA DE GESTIÓN DE CLIENTES
    ======================================== */
 
-/* Contenedor principal */
+/* Contenedor principal (margin-left del sidebar fijo se define en common.css) */
 .gestion-container {
     max-width: 1400px;
     margin: 0 auto;
+    margin-left: 80px; /* Espacio para el sidebar fijo; en móvil common.css usa 60px */
     padding: 20px;
 }
 
@@ -867,6 +868,15 @@
     gap: 8px;
 }
 
+.btn-action:disabled,
+.btn-action.is-loading {
+    opacity: 0.65;
+    cursor: not-allowed;
+    pointer-events: none;
+    transform: none;
+    box-shadow: none;
+}
+
 .btn-primary {
     background: #007bff;
     color: white;
@@ -1079,6 +1089,18 @@
 
 .historial-observaciones strong {
     color: #333;
+}
+
+.historial-base-badge {
+    display: inline-block;
+    margin-top: 6px;
+    background: #007bff;
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
 }
 
 .error-historial {

@@ -33,7 +33,43 @@ function abrirBusquedaClienteNavbar() {
                 </div>
             `;
         }
+        // Cargar bases que gestiona el asesor (misma lógica que Coord_gestion → bases del coordinador)
+        cargarBasesGestionandoEnNavbar();
     }
+}
+
+/**
+ * Cargar y mostrar en el modal del navbar las bases de clientes que gestiona el asesor.
+ * Las bases son las que el coordinador cargó en la pestaña BASES y a las que dio acceso al asesor.
+ */
+function cargarBasesGestionandoEnNavbar() {
+    const contenedor = document.getElementById('navbar-bases-gestionando-lista');
+    const bloqueBases = document.getElementById('navbar-bases-gestionando');
+    if (!contenedor) return;
+
+    contenedor.innerHTML = '<span style="color: #666;"><i class="fas fa-spinner fa-spin"></i> Cargando...</span>';
+
+    fetch('index.php?action=obtener_bases_acceso')
+        .then(response => {
+            if (!response.ok) throw new Error('Error al obtener bases');
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && data.bases && data.bases.length > 0) {
+                const nombres = data.bases.map(b => b.nombre_base || b.NOMBRE_BASE || 'Base sin nombre');
+                const clientes = data.bases.map(b => (b.total_clientes || 0) + ' clientes');
+                contenedor.innerHTML = nombres.map((nombre, i) =>
+                    `<div style="margin-bottom: 4px;"><strong>${nombre}</strong> <span style="color: #666; font-size: 12px;">(${clientes[i]})</span></div>`
+                ).join('') || '<span style="color: #666;">No tienes bases asignadas</span>';
+            } else {
+                contenedor.innerHTML = '<span style="color: #856404;"><i class="fas fa-info-circle"></i> No tienes bases de clientes asignadas</span>';
+            }
+            if (bloqueBases) bloqueBases.style.display = 'block';
+        })
+        .catch(() => {
+            contenedor.innerHTML = '<span style="color: #666;">No se pudo cargar la información de bases</span>';
+            if (bloqueBases) bloqueBases.style.display = 'block';
+        });
 }
 
 /**
@@ -79,6 +115,16 @@ function crearModalBusqueda() {
                     <i class="fas fa-search"></i> Buscar Cliente
                 </h3>
                 <button onclick="cerrarBusquedaNavbar()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+            </div>
+            
+            <!-- Base(s) que gestiona el asesor (visible solo para asesores con bases) -->
+            <div id="navbar-bases-gestionando" style="margin-bottom: 16px; padding: 12px; background: #e7f3ff; border-radius: 8px; border-left: 4px solid #007bff;">
+                <div style="font-size: 12px; font-weight: 600; color: #0056b3; margin-bottom: 6px;">
+                    <i class="fas fa-database"></i> Base(s) que gestionas
+                </div>
+                <div id="navbar-bases-gestionando-lista" style="font-size: 13px; color: #333;">
+                    <span style="color: #666;"><i class="fas fa-spinner fa-spin"></i> Cargando...</span>
+                </div>
             </div>
             
             <div style="margin-bottom: 20px;">
@@ -174,6 +220,7 @@ async function buscarClienteNavbar() {
                 const nombreCliente = cliente['NOMBRE CONTRATANTE'] || cliente.nombre || cliente.NOMBRE_CLIENTE || 'N/A';
                 const cc = cliente.IDENTIFICACION || cliente.cc || cliente.ID_CLIENTE || 'N/A';
                 const celular = cliente.CELULAR || cliente.CEL || cliente['TEL 1'] || cliente.cel || 'N/A';
+                const nombreBase = cliente.NOMBRE_BASE || cliente.nombre_base || '';
                 
                 console.log('[Navbar Busqueda] Cliente encontrado:', { clienteId, nombreCliente, cc });
                 
@@ -186,6 +233,7 @@ async function buscarClienteNavbar() {
                             ${nombreCliente}
                         </div>
                         <div style="font-size: 13px; color: #666;">
+ ${nombreBase ? `<div><i class="fas fa-database"></i> Base: <strong style="color:#0056b3;">${nombreBase}</strong></div>` : ''}
                             <div><i class="fas fa-id-card"></i> CC: ${cc}</div>
                             <div><i class="fas fa-phone"></i> Celular: ${celular}</div>
                         </div>
