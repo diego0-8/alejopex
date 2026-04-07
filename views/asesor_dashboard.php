@@ -1,4 +1,4 @@
-<?php require_once 'config.php'; ?>
+<?php require_once __DIR__ . '/../config.php'; ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/common.css">
     <link rel="stylesheet" href="assets/css/admin-dashboard.css">
     <link rel="stylesheet" href="assets/css/coordinador-dashboard.css">
     <style>
@@ -208,6 +209,50 @@
         .clientes-search-bar .clear-btn:hover {
             background: #545b62;
         }
+
+        .clientes-paginacion {
+            display: none;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 16px;
+            padding: 12px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+
+        .clientes-paginacion.visible {
+            display: flex;
+        }
+
+        .clientes-paginacion .btn-pag {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            background: #007bff;
+            color: #fff;
+            transition: background 0.2s ease;
+        }
+
+        .clientes-paginacion .btn-pag:hover:not(:disabled) {
+            background: #0056b3;
+        }
+
+        .clientes-paginacion .btn-pag:disabled {
+            background: #ced4da;
+            color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .clientes-paginacion .pag-info {
+            font-size: 13px;
+            color: #495057;
+        }
         
         /* Estilos para los botones de acción de la tabla */
         .action-buttons {
@@ -283,13 +328,13 @@
     <?php 
     // Incluir navbar compartido
     $action = 'asesor_dashboard';
-    include 'views/Navbar.php'; 
+    include __DIR__ . '/Navbar.php'; 
     ?>
 
     <div class="main-container">
         <?php 
         // Incluir header compartido
-        include 'views/Header.php'; 
+        include __DIR__ . '/Header.php'; 
         ?>
 
         <!-- Sección Principal del Dashboard -->
@@ -536,6 +581,12 @@
                                             </tr>
                                         </thead>
                                         <tbody>
+                                            <?php
+                                            $limite_clientes = defined('ASESOR_DASHBOARD_LIMIT_CLIENTES') ? (int) ASESOR_DASHBOARD_LIMIT_CLIENTES : 500;
+                                            $mostrando_limite = isset($clientes) && is_array($clientes) && count($clientes) >= $limite_clientes && $limite_clientes > 0;
+                                            if ($mostrando_limite): ?>
+                                                <tr><td colspan="3" class="text-muted" style="font-size: 12px; padding: 8px;"><i class="fas fa-info-circle"></i> Mostrando los primeros <?php echo $limite_clientes; ?> clientes. Use la búsqueda para encontrar más.</td></tr>
+                                            <?php endif; ?>
                                             <?php if (isset($clientes) && !empty($clientes) && is_array($clientes)): ?>
                                                 <?php foreach ($clientes as $comercio): ?>
                                                     <tr data-comercio-id="<?php echo $comercio['ID_COMERCIO'] ?? $comercio['id'] ?? ''; ?>">
@@ -573,6 +624,7 @@
                                             <?php endif; ?>
                                         </tbody>
                                     </table>
+                                    <div id="clientes-paginacion" class="clientes-paginacion" aria-label="Paginación de clientes"></div>
                                 </div>
                                 </div>
                                 
@@ -884,6 +936,101 @@
             }
         }
         
+        const CLIENTES_POR_PAGINA = 6;
+        let clientesListaCompletaClientesTab = [];
+        let clientesListaAsignadosReferenciaBusqueda = [];
+        let clientesPaginaActualClientesTab = 1;
+
+        function appendFilaCliente(tbody, comercio) {
+            const id = comercio.ID_COMERCIO || comercio.id;
+            const nombre = comercio.NOMBRE_COMERCIO || comercio.nombre_comercio || '-';
+            const nit = comercio.NIT_CXC || comercio.nit_cxc || '-';
+            const cel = comercio.CEL || comercio.cel || '-';
+            const row = document.createElement('tr');
+            row.setAttribute('data-comercio-id', id);
+            row.innerHTML = `
+                <td>
+                    <div class="user-info">
+                        <div class="user-details">
+                            <strong>${nombre}</strong>
+                            <small>NIT CXC: ${nit}</small>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <span class="phone-number">${cel}</span>
+                </td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="btn-action btn-manage" onclick="gestionarCliente('${id}')" title="Gestionar">
+                            <i class="fas fa-edit"></i> Gestionar
+                        </button>
+                        <button class="btn-action btn-history" onclick="verHistorialCliente('${id}')" title="Historial">
+                            <i class="fas fa-history"></i> Historial
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(row);
+        }
+
+        function actualizarPaginacionClientes(total) {
+            const el = document.getElementById('clientes-paginacion');
+            if (!el) return;
+            const totalPaginas = total > 0 ? Math.ceil(total / CLIENTES_POR_PAGINA) : 1;
+            if (total === 0) {
+                el.classList.remove('visible');
+                el.innerHTML = '';
+                return;
+            }
+            clientesPaginaActualClientesTab = Math.min(Math.max(1, clientesPaginaActualClientesTab), totalPaginas);
+            const inicio = (clientesPaginaActualClientesTab - 1) * CLIENTES_POR_PAGINA + 1;
+            const fin = Math.min(total, clientesPaginaActualClientesTab * CLIENTES_POR_PAGINA);
+            el.classList.add('visible');
+            el.innerHTML = `
+                <button type="button" class="btn-pag" ${clientesPaginaActualClientesTab <= 1 ? 'disabled' : ''} onclick="irPaginaClientesDashboard(${clientesPaginaActualClientesTab - 1})">
+                    <i class="fas fa-chevron-left"></i> Anterior
+                </button>
+                <span class="pag-info">Página ${clientesPaginaActualClientesTab} de ${totalPaginas} · Mostrando ${inicio}–${fin} de ${total} (máx. ${CLIENTES_POR_PAGINA} por página)</span>
+                <button type="button" class="btn-pag" ${clientesPaginaActualClientesTab >= totalPaginas ? 'disabled' : ''} onclick="irPaginaClientesDashboard(${clientesPaginaActualClientesTab + 1})">
+                    Siguiente <i class="fas fa-chevron-right"></i>
+                </button>
+            `;
+        }
+
+        function irPaginaClientesDashboard(pagina) {
+            const total = clientesListaCompletaClientesTab.length;
+            const totalPaginas = total > 0 ? Math.ceil(total / CLIENTES_POR_PAGINA) : 1;
+            if (pagina < 1 || pagina > totalPaginas) return;
+            clientesPaginaActualClientesTab = pagina;
+            pintarPaginaClientesDashboard();
+        }
+
+        function pintarPaginaClientesDashboard() {
+            const tbody = document.querySelector('#tab-clientes .clientes-table tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            const lista = clientesListaCompletaClientesTab;
+            const total = lista.length;
+            if (total === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="3" class="no-data">
+                            <i class="fas fa-users"></i>
+                            <p>No se encontraron clientes con los filtros aplicados</p>
+                            <small>Intente ajustar los criterios de búsqueda</small>
+                        </td>
+                    </tr>
+                `;
+                actualizarPaginacionClientes(0);
+                return;
+            }
+            const inicio = (clientesPaginaActualClientesTab - 1) * CLIENTES_POR_PAGINA;
+            const paginaItems = lista.slice(inicio, inicio + CLIENTES_POR_PAGINA);
+            paginaItems.forEach(c => appendFilaCliente(tbody, c));
+            actualizarPaginacionClientes(total);
+        }
+
         // Funciones para los filtros de clientes (solo comercios asignados por tareas)
         async function aplicarFiltrosClientes() {
             const gestionado = document.getElementById('filter-gestionado').value;
@@ -942,67 +1089,16 @@
         }
         
         function actualizarTablaClientes(clientes) {
-            const tbody = document.querySelector('#tab-clientes .clientes-table tbody');
-            if (!tbody) return;
-            
-            // Limpiar contenido anterior
-            tbody.innerHTML = '';
-            
-            const lista = Array.isArray(clientes) ? clientes : [];
-            if (lista.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="3" class="no-data">
-                            <i class="fas fa-users"></i>
-                            <p>No se encontraron clientes con los filtros aplicados</p>
-                            <small>Intente ajustar los criterios de búsqueda</small>
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-            
-            // Generar filas para cada cliente (solo asignados por tareas)
-            lista.forEach(comercio => {
-                const id = comercio.ID_COMERCIO || comercio.id;
-                const nombre = comercio.NOMBRE_COMERCIO || comercio.nombre_comercio || '-';
-                const nit = comercio.NIT_CXC || comercio.nit_cxc || '-';
-                const cel = comercio.CEL || comercio.cel || '-';
-                
-                const row = document.createElement('tr');
-                row.setAttribute('data-comercio-id', id);
-                row.innerHTML = `
-                    <td>
-                        <div class="user-info">
-                            <div class="user-details">
-                                <strong>${nombre}</strong>
-                                <small>NIT CXC: ${nit}</small>
-                            </div>
-                        </div>
-                    </td>
-                    <td>
-                        <span class="phone-number">${cel}</span>
-                    </td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="btn-action btn-manage" onclick="gestionarCliente('${id}')" title="Gestionar">
-                                <i class="fas fa-edit"></i> Gestionar
-                            </button>
-                            <button class="btn-action btn-history" onclick="verHistorialCliente('${id}')" title="Historial">
-                                <i class="fas fa-history"></i> Historial
-                            </button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
+            const lista = Array.isArray(clientes) ? clientes.slice() : [];
+            clientesListaAsignadosReferenciaBusqueda = lista.slice();
+            clientesListaCompletaClientesTab = lista;
+            clientesPaginaActualClientesTab = 1;
+            pintarPaginaClientesDashboard();
         }
 
         // Buscar por CC o Número de Obligación dentro de los clientes ASIGNADOS
         async function ejecutarBusquedaClientes() {
             const termino = document.getElementById('clientes-search-input').value.trim();
-            const tbody = document.querySelector('#tab-clientes .clientes-table tbody');
-            if (!tbody) return;
             if (!termino) { aplicarFiltrosClientes(); return; }
             try {
                 const resp = await fetch('index.php?action=buscar_cliente_asesor', {
@@ -1012,10 +1108,9 @@
                 });
                 const data = await resp.json();
                 const resultados = Array.isArray(data.clientes) ? data.clientes : [];
-                // Limitar a IDs que estén actualmente asignados (presentes en el DOM)
-                const asignadosIds = Array.from(document.querySelectorAll('#tab-clientes tr[data-comercio-id]')).map(tr => String(tr.getAttribute('data-comercio-id')));
-                const filtrados = resultados.filter(c => asignadosIds.includes(String(c.ID_COMERCIO || c.id)));
-                
+                const ref = clientesListaAsignadosReferenciaBusqueda || [];
+                const asignadosIds = new Set(ref.map(c => String(c.ID_COMERCIO || c.id)));
+                const filtrados = resultados.filter(c => asignadosIds.has(String(c.ID_COMERCIO || c.id)));
                 actualizarTablaClientesAsignados(filtrados);
             } catch (e) {
                 console.error('Error en búsqueda de clientes:', e);
@@ -1029,10 +1124,11 @@
         }
 
         function actualizarTablaClientesAsignados(lista) {
+            clientesListaCompletaClientesTab = Array.isArray(lista) ? lista : [];
+            clientesPaginaActualClientesTab = 1;
             const tbody = document.querySelector('#tab-clientes .clientes-table tbody');
             if (!tbody) return;
-            tbody.innerHTML = '';
-            if (!lista || lista.length === 0) {
+            if (clientesListaCompletaClientesTab.length === 0) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="3" class="no-data">
@@ -1041,38 +1137,10 @@
                         </td>
                     </tr>
                 `;
+                actualizarPaginacionClientes(0);
                 return;
             }
-            lista.forEach(comercio => {
-                const id = comercio.ID_COMERCIO || comercio.id;
-                const nombre = comercio.NOMBRE_COMERCIO || comercio.nombre_comercio || '-';
-                const nit = comercio.NIT_CXC || comercio.nit_cxc || '-';
-                const cel = comercio.CEL || comercio.cel || '-';
-                const row = document.createElement('tr');
-                row.setAttribute('data-comercio-id', id);
-                row.innerHTML = `
-                    <td>
-                        <div class="user-info">
-                            <div class="user-details">
-                                <strong>${nombre}</strong>
-                                <small>NIT CXC: ${nit}</small>
-                            </div>
-                        </div>
-                    </td>
-                    <td><span class="phone-number">${cel}</span></td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="btn-action btn-manage" onclick="gestionarCliente('${id}')" title="Gestionar">
-                                <i class="fas fa-edit"></i> Gestionar
-                            </button>
-                            <button class="btn-action btn-history" onclick="verHistorialCliente('${id}')" title="Historial">
-                                <i class="fas fa-history"></i> Historial
-                            </button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
+            pintarPaginaClientesDashboard();
         }
         
         // Función para actualizar estadísticas automáticamente
@@ -1239,12 +1307,13 @@
         // Datos iniciales de clientes asignados renderizados por PHP
         const comerciosAsignadosInicial = <?php echo json_encode($clientes ?? [], JSON_UNESCAPED_UNICODE); ?>;
 
-        // Cargar resumen de tareas al cargar la página
+        // Cargar al iniciar: tabla desde JSON embebido (rápido); resumen y estadísticas en paralelo (sin encadenar)
         document.addEventListener('DOMContentLoaded', function() {
-            actualizarResumenTareas();
-            actualizarEstadisticas();
-            // Pintar la tabla con los datos de clientes asignados al cargar
             actualizarTablaClientes(comerciosAsignadosInicial);
+            Promise.all([
+                actualizarResumenTareas(),
+                actualizarEstadisticas()
+            ]).catch(function () { /* errores ya logueados en cada función */ });
         });
         
         // Función global para gestionar cliente (para compatibilidad)

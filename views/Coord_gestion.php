@@ -1,4 +1,4 @@
-<?php require_once 'config.php'; ?>
+<?php require_once __DIR__ . '/../config.php'; ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/common.css">
     <link rel="stylesheet" href="assets/css/admin-dashboard.css">
     <link rel="stylesheet" href="assets/css/coordinador-dashboard.css">
 </head>
@@ -17,13 +18,13 @@
     <?php 
     // Incluir navbar compartido
     $action = 'coordinador_gestion';
-    include 'views/Navbar.php'; 
+    include __DIR__ . '/Navbar.php'; 
     ?>
 
     <div class="main-container">
         <?php 
         // Incluir header compartido
-        include 'views/Header.php'; 
+        include __DIR__ . '/Header.php'; 
         ?>
 
         <!-- Sección Principal de Gestión -->
@@ -56,7 +57,7 @@
                     <span class="active" onclick="cambiarTab('bases')">BASES</span>
                     <span onclick="cambiarTab('tareas')">TAREAS</span>
                     <span onclick="cambiarTab('carga-archivo')">CARGA DE ARCHIVO</span>
-                    <span onclick="cambiarTab('historial')">HISTORIAL</span>
+                    <span onclick="cambiarTab('habilitar')">HABILITAR</span>
                 </div>
                 
                 <div class="content-sections">
@@ -431,50 +432,33 @@
                         </div>
                     </div>
 
-                    <!-- PESTAÑA 4: HISTORIAL -->
-                    <div class="tab-content" id="tab-historial">
+                    <!-- PESTAÑA 4: HABILITAR (bases deshabilitadas) -->
+                    <div class="tab-content" id="tab-habilitar">
                         <div class="historial-container">
                             <div class="historial-header">
-                                <h4>Historial de Actividades</h4>
-                                <div class="historial-filters">
-                                    <select class="form-control" onchange="filtrarHistorial()">
-                                        <option value="">Todas las actividades</option>
-                                        <option value="carga_csv">Cargas de archivos</option>
-                                        <option value="asignacion_tarea">Asignaciones de tareas</option>
-                                        <option value="completar_tarea">Tareas completadas</option>
-                                        <option value="acceso_base">Accesos a bases</option>
-                                        <option value="semana">Última semana</option>
-                                        <option value="mes">Último mes</option>
-                                    </select>
-                                </div>
+                                <h4>Bases deshabilitadas</h4>
+                                <p class="text-muted" style="margin-top: 8px;">Bases que fueron deshabilitadas. Al habilitar una base vuelve a estar activa y los asesores con acceso podrán verla de nuevo.</p>
                             </div>
-                            
-                            <div class="historial-table">
-                                <table>
+                            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                <table class="table table-striped">
                                     <thead>
                                         <tr>
-                                            <th>Actividad</th>
-                                            <th>Archivo/Tarea</th>
-                                            <th>Fecha</th>
-                                            <th>Estado</th>
+                                            <th>Nombre</th>
+                                            <th>Fecha creación</th>
+                                            <th>Total clientes</th>
+                                            <th>Acciones</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="historial-tbody">
+                                    <tbody id="bases-deshabilitadas-tbody">
                                         <tr>
-                                            <td colspan="4" class="empty-state">
-                                                <i class="fas fa-history"></i>
-                                                <p>Cargando historial...</p>
+                                            <td colspan="4" class="text-center">
+                                                <i class="fas fa-spinner fa-spin"></i> Cargando...
                                             </td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
-                            
-                            <div class="historial-actions">
-                                <button class="btn btn-secondary" onclick="limpiarHistorial()">
-                                    <i class="fas fa-trash"></i> Limpiar Historial
-                                </button>
-                            </div>
+                            <p id="bases-deshabilitadas-vacio" style="display: none; text-align: center; color: #666; margin-top: 16px;">No hay bases deshabilitadas.</p>
                         </div>
                     </div>
                 </div>
@@ -647,8 +631,16 @@
                 <button class="modal-close" onclick="closeModalVerClientes()">&times;</button>
             </div>
             <div class="modal-body" id="modal-ver-clientes-body">
-                <div class="clientes-summary">
-                    <p><strong>Total de clientes:</strong> <span id="modal-clientes-total">0</span></p>
+                <div class="clientes-summary" style="display: flex; flex-wrap: wrap; align-items: center; gap: 15px; margin-bottom: 15px;">
+                    <p style="margin: 0;"><strong>Total de clientes:</strong> <span id="modal-clientes-total">0</span></p>
+                    <div style="flex: 1; min-width: 260px;">
+                        <label for="modal-ver-clientes-busqueda" class="sr-only">Buscar cliente</label>
+                        <input type="text"
+                               id="modal-ver-clientes-busqueda"
+                               class="form-control"
+                               placeholder="Buscar por cédula, teléfono o nombre..."
+                               style="width: 100%; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
+                    </div>
                 </div>
                 <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
                     <table class="table table-striped">
@@ -657,11 +649,12 @@
                                 <th>CC</th>
                                 <th>Nombre</th>
                                 <th>Celular</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="modal-clientes-tbody">
                             <tr>
-                                <td colspan="3" class="text-center">
+                                <td colspan="4" class="text-center">
                                     <i class="fas fa-spinner fa-spin"></i> Cargando clientes...
                                 </td>
                             </tr>
@@ -671,6 +664,58 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModalVerClientes()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Detalle Cliente (info + obligaciones) -->
+    <div class="modal" id="modal-detalle-cliente" style="display: none;">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3><i class="fas fa-user"></i> Detalle del Cliente</h3>
+                <button class="modal-close" onclick="closeModalDetalleCliente()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-detalle-cliente-body">
+                <div id="modal-detalle-cliente-loading" style="text-align: center; padding: 40px;">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p>Cargando información...</p>
+                </div>
+                <div id="modal-detalle-cliente-content" style="display: none;">
+                    <div class="detalle-cliente-info" style="margin-bottom: 24px; padding: 16px; background: #f8f9fa; border-radius: 8px;">
+                        <h4 style="margin-bottom: 12px; color: #333;"><i class="fas fa-id-card"></i> Datos del cliente</h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                            <div><strong>Cédula:</strong> <span id="detalle-cliente-cc">-</span></div>
+                            <div><strong>Nombre:</strong> <span id="detalle-cliente-nombre">-</span></div>
+                            <div><strong>Barrio:</strong> <span id="detalle-cliente-barrio">-</span></div>
+                            <div><strong>Correo:</strong> <span id="detalle-cliente-email">-</span></div>
+                        </div>
+                        <h4 style="margin: 16px 0 8px 0; color: #333;"><i class="fas fa-phone"></i> Teléfonos</h4>
+                        <div id="detalle-cliente-telefonos" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                    </div>
+                    <div class="detalle-cliente-obligaciones">
+                        <h4 style="margin-bottom: 12px; color: #333;"><i class="fas fa-file-invoice-dollar"></i> Obligaciones</h4>
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Nº Obligación</th>
+                                        <th>Producto</th>
+                                        <th>Saldo capital</th>
+                                        <th>Saldo total</th>
+                                        <th>Días mora</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detalle-cliente-obligaciones-tbody">
+                                </tbody>
+                            </table>
+                        </div>
+                        <p id="detalle-cliente-sin-obligaciones" style="display: none; color: #666; font-style: italic;">Sin obligaciones registradas.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModalDetalleCliente()">Cerrar</button>
             </div>
         </div>
     </div>
@@ -858,7 +903,7 @@
     <script>
         // Cerrar modal al hacer clic fuera de él
         window.onclick = function(event) {
-            const modals = ['modal-ver-asesores-acceso', 'modal-ver-clientes', 'modal-acceso-base', 'modal-asignaciones-asesores', 'modal-ver-asignaciones'];
+            const modals = ['modal-ver-asesores-acceso', 'modal-ver-clientes', 'modal-detalle-cliente', 'modal-acceso-base', 'modal-asignaciones-asesores', 'modal-ver-asignaciones'];
             modals.forEach(modalId => {
                 const modal = document.getElementById(modalId);
                 if (modal && event.target === modal) {
@@ -866,6 +911,8 @@
                         cerrarModalVerAsesores();
                     } else if (modalId === 'modal-ver-clientes') {
                         closeModalVerClientes();
+                    } else if (modalId === 'modal-detalle-cliente') {
+                        closeModalDetalleCliente();
                     } else if (modalId === 'modal-acceso-base') {
                         closeModalAccesoBase();
                     } else if (modalId === 'modal-asignaciones-asesores') {

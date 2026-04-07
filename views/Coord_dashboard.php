@@ -1,4 +1,4 @@
-<?php require_once 'config.php'; ?>
+<?php require_once __DIR__ . '/../config.php'; ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/common.css">
     <link rel="stylesheet" href="assets/css/admin-dashboard.css">
     <link rel="stylesheet" href="assets/css/coordinador-dashboard.css">
 </head>
@@ -17,13 +18,13 @@
     <?php 
     // Incluir navbar compartido
     $action = 'coordinador_dashboard';
-    include 'views/Navbar.php'; 
+    include __DIR__ . '/Navbar.php'; 
     ?>
 
     <div class="main-container">
         <?php 
         // Incluir header compartido
-        include 'views/Header.php'; 
+        include __DIR__ . '/Header.php'; 
         ?>
 
         <!-- Sección Principal del Dashboard -->

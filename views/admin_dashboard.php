@@ -1,4 +1,4 @@
-<?php require_once 'config.php'; ?>
+<?php require_once __DIR__ . '/../config.php'; ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/common.css">
     <link rel="stylesheet" href="assets/css/admin-dashboard.css">
 </head>
 <body data-user-id="<?php echo $_SESSION['usuario_id'] ?? ''; ?>">
@@ -16,13 +17,13 @@
     <?php 
     // Incluir navbar compartido
     $action = 'dashboard';
-    include 'views/Navbar.php'; 
+    include __DIR__ . '/Navbar.php'; 
     ?>
 
     <div class="main-container">
         <?php 
         // Incluir header compartido
-        include 'views/Header.php'; 
+        include __DIR__ . '/Header.php'; 
         ?>
 
         <!-- Sección Principal del Dashboard -->
@@ -222,6 +223,7 @@
                                                 <th>Nombre Completo</th>
                                                 <th>Usuario</th>
                                                 <th>Rol</th>
+                                                <th>Extensión</th>
                                                 <th>Estado</th>
                                                 <th>Fecha Creación</th>
                                                 <th>Acciones</th>
@@ -249,6 +251,14 @@
                                                             <span class="rol-badge rol-<?php echo $usuario['rol']; ?>">
                                                                 <?php echo ucfirst($usuario['rol']); ?>
                                                             </span>
+                                                        </td>
+                                                        <td class="col-extension">
+                                                            <?php
+                                                            $ext = isset($usuario['extension']) ? trim((string) $usuario['extension']) : '';
+                                                            echo $ext !== ''
+                                                                ? htmlspecialchars($ext, ENT_QUOTES, 'UTF-8')
+                                                                : '<span class="extension-sin-dato">Ninguna</span>';
+                                                            ?>
                                                         </td>
                                                         <td>
                                                             <span class="estado-badge estado-<?php echo $usuario['estado']; ?>">
@@ -286,7 +296,7 @@
                                                 <?php endforeach; ?>
                                             <?php else: ?>
                                                 <tr>
-                                                    <td colspan="6" class="no-data">
+                                                    <td colspan="7" class="no-data">
                                                         <i class="fas fa-users"></i>
                                                         <p>No hay usuarios registrados</p>
                                                         <button class="btn btn-primary" onclick="openModal('crear-usuario')">
@@ -2163,6 +2173,11 @@
             padding: 15px 20px;
             border-bottom: 1px solid #f1f3f4;
             vertical-align: middle;
+        }
+
+        .usuarios-table .extension-sin-dato {
+            color: #868e96;
+            font-style: italic;
         }
 
         .usuarios-table tbody tr:hover {

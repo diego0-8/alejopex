@@ -1,4 +1,4 @@
-<?php require_once 'config.php'; ?>
+<?php require_once __DIR__ . '/../config.php'; ?>
 <!DOCTYPE html>
 <html lang="es">
 
@@ -21,7 +21,7 @@
     <?php
     // Incluir navbar compartido
     $action = 'asesor_gestionar';
-    include 'views/Navbar.php';
+    include __DIR__ . '/Navbar.php';
     ?>
 
     <div class="gestion-container">
@@ -175,7 +175,7 @@
                 <!-- Softphone WebRTC - Solo visible para asesores con extensión -->
                 <?php
                 // Obtener datos del usuario desde la base de datos para verificar extensión
-                require_once 'models/Usuario.php';
+                require_once __DIR__ . '/../models/Usuario.php';
                 $usuario_model = new Usuario();
 
                 // Intentar obtener el usuario de múltiples formas
@@ -210,8 +210,9 @@
                     if ($usuario_data) {
                         error_log("DEBUG Softphone - Usuario encontrado:");
                         error_log("  - Cédula: " . ($usuario_data['cedula'] ?? 'NO DEFINIDA'));
-                        error_log("  - Extension: " . ($usuario_data['extension'] ?? 'NO DEFINIDA'));
-                        error_log("  - SIP Password: " . (!empty($usuario_data['sip_password']) ? 'DEFINIDA (' . strlen($usuario_data['sip_password']) . ' caracteres)' : 'VACIA'));
+                        error_log("  - Extension: " . ($usuario_data['extension_telefono'] ?? $usuario_data['extension'] ?? 'NO DEFINIDA'));
+                        error_log("  - Clave Extension: " . (!empty($usuario_data['clave_extension'] ?? '') ? 'DEFINIDA (' . strlen($usuario_data['clave_extension']) . ' caracteres)' : 'VACIA'));
+                        error_log("  - SIP Password (legacy): " . (!empty($usuario_data['sip_password'] ?? '') ? 'DEFINIDA (' . strlen($usuario_data['sip_password']) . ' caracteres)' : 'VACIA'));
                     } else {
                         error_log("DEBUG Softphone - ERROR: Usuario NO encontrado");
                         error_log("  - Intentó con: " . ($identificador_usado ?: 'NINGUNO'));
@@ -219,12 +220,16 @@
                 }
 
                 // Verificar que el usuario sea asesor Y tenga extensión y clave SIP asignadas
+                // Prioridad: extension_telefono y clave_extension (nuevos campos), luego extension y sip_password (legacy)
+                $extension_telefono = $usuario_data['extension_telefono'] ?? $usuario_data['extension'] ?? '';
+                $clave_extension = $usuario_data['clave_extension'] ?? $usuario_data['sip_password'] ?? '';
+                
                 $mostrar_softphone = (
                     isset($_SESSION['usuario_rol']) &&
                     $_SESSION['usuario_rol'] === 'asesor' &&
                     $usuario_data &&
-                    !empty($usuario_data['extension'] ?? '') &&
-                    !empty($usuario_data['sip_password'] ?? '')
+                    !empty($extension_telefono) &&
+                    !empty($clave_extension)
                 );
 
                 // DEBUG: Verificar resultado de mostrar_softphone
@@ -299,7 +304,7 @@
             style="display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap;">
             <!-- Botones iniciales (antes de guardar) -->
             <div id="botones-iniciales" style="display: flex; gap: 15px; align-items: center;">
-                <button class="btn-action btn-primary" onclick="guardarGestion()">
+                <button type="button" class="btn-action btn-primary" id="btn-guardar-gestion" onclick="guardarGestion()">
                     <i class="fas fa-save"></i> Guardar Gestión
                 </button>
                 <button class="btn-action btn-secondary" onclick="volverTareas()">
@@ -311,7 +316,11 @@
             </div>
 
             <!-- Botones después de guardar (ocultos inicialmente) -->
-            <div id="botones-despues-guardar" style="display: none; gap: 15px; align-items: center;">
+            <div id="botones-despues-guardar" style="display: none; gap: 15px; align-items: center; flex-wrap: wrap;">
+                <button type="button" class="btn-action btn-primary" id="btn-nueva-gestion" onclick="prepararNuevaGestion()"
+                    title="Registrar otra gestión sobre este mismo cliente sin recargar la página">
+                    <i class="fas fa-plus-circle"></i> Nueva gestión
+                </button>
                 <button class="btn-action btn-primary" id="btn-siguiente-cliente" onclick="irSiguienteCliente()"
                     style="display: none;">
                     <i class="fas fa-arrow-right"></i> Siguiente Cliente
@@ -499,10 +508,15 @@
         </div>
     </div>
 
-    <script src="assets/js/navbar-busqueda-cliente.js"></script>
-    <script src="assets/js/asesor-gestionar.js"></script>
-    <script src="assets/js/asesor-tiempos.js"></script>
-    <script src="assets/js/hybrid-updater.js"></script>
+    <?php
+    // Cache busting para asegurar que el navegador cargue los JS actualizados
+    $v_nav = @filemtime(__DIR__ . '/../assets/js/navbar-busqueda-cliente.js') ?: (defined('APP_VERSION') ? APP_VERSION : time());
+    $v_gestionar = @filemtime(__DIR__ . '/../assets/js/asesor-gestionar.js') ?: (defined('APP_VERSION') ? APP_VERSION : time());
+    $v_tiempos = @filemtime(__DIR__ . '/../assets/js/asesor-tiempos.js') ?: (defined('APP_VERSION') ? APP_VERSION : time());
+    ?>
+    <script src="assets/js/navbar-busqueda-cliente.js?v=<?php echo urlencode((string)$v_nav); ?>"></script>
+    <script src="assets/js/asesor-gestionar.js?v=<?php echo urlencode((string)$v_gestionar); ?>"></script>
+    <script src="assets/js/asesor-tiempos.js?v=<?php echo urlencode((string)$v_tiempos); ?>"></script>
 
     <script>
         // Función para abrir/cerrar modal de tiempo
@@ -763,7 +777,8 @@
                         const comercioId = comercio.ID_COMERCIO || comercio.id || comercio.ID_CLIENTE;
                         const nombreCliente = comercio.nombre || comercio['NOMBRE CONTRATANTE'] || comercio.NOMBRE_CLIENTE || 'N/A';
                         const cc = comercio.cc || comercio.IDENTIFICACION || 'N/A';
-                        const celular = comercio.CEL || comercio['TEL 1'] || comercio.cel || 'N/A';
+                        const celular = comercio.CEL || comercio.CELULAR || comercio['TEL 1'] || comercio.cel || 'N/A';
+                        const nb = comercio.NOMBRE_BASE || comercio.nombre_base || '';
 
                         html += `
                             <div style="padding: 15px; border-bottom: 1px solid #dee2e6; cursor: pointer;" 
@@ -772,6 +787,7 @@
                                     ${nombreCliente}
                                 </div>
                                 <div style="font-size: 13px; color: #666;">
+                                    ${nb ? `<div><i class="fas fa-database"></i> Base: <strong style="color:#0056b3;">${nb}</strong></div>` : ''}
                                     <div>CC: ${cc}</div>
                                     <div>Celular: ${celular}</div>
                                 </div>
@@ -803,16 +819,8 @@
 
         function gestionarClienteDesdeModal(clienteId) {
             cerrarModalBusqueda();
-
-            // Si la función de cambio sin recargar está disponible, usarla
-            if (typeof window.cambiarClienteSinRecargar === 'function') {
-                console.log('Modal-busqueda: Cambiando cliente sin recargar para mantener la llamada');
-                window.cambiarClienteSinRecargar(clienteId);
-            } else {
-                // Si no está disponible, usar redirección normal
-                console.log('Modal-busqueda: Redirigiendo a vista de gestión');
-                window.location.href = `index.php?action=asesor_gestionar&cliente_id=${clienteId}`;
-            }
+            // Redirigir a la vista de gestión (recarga la página)
+            window.location.href = `index.php?action=asesor_gestionar&cliente_id=${clienteId}`;
         }
 
         function volverClientes() {
@@ -821,6 +829,9 @@
 
         // Función global para ser llamada desde asesor-gestionar.js después de guardar
         window.mostrarBotonesDespuesGuardar = mostrarBotonesDespuesGuardar;
+        if (typeof prepararNuevaGestion === 'function') {
+            window.prepararNuevaGestion = prepararNuevaGestion;
+        }
     </script>
 
     <!-- WebRTC Softphone Integration -->
@@ -837,7 +848,7 @@
             require_once $config_path;
         } else {
             // Fallback: intentar con ruta relativa
-            require_once 'config/asterisk.php';
+            require_once __DIR__ . '/../config/asterisk.php';
         }
         
         // Verificar que las constantes estén definidas
@@ -856,11 +867,17 @@
         error_log('  - wss_server: ' . ($webrtc_config['wss_server'] ?? 'NO DEFINIDO'));
 
         // Usar datos frescos de la base de datos si están disponibles (prioridad sobre sesión)
-        $extension = $usuario_data['extension'] ?? $_SESSION['usuario_extension'] ?? '';
-        $sip_password = $usuario_data['sip_password'] ?? $_SESSION['usuario_sip_password'] ?? '';
+        // Prioridad: extension_telefono y clave_extension (nuevos campos), luego extension y sip_password (legacy)
+        $extension = $usuario_data['extension_telefono'] ?? $usuario_data['extension'] ?? $_SESSION['usuario_extension'] ?? '';
+        $sip_password = $usuario_data['clave_extension'] ?? $usuario_data['sip_password'] ?? $_SESSION['usuario_sip_password'] ?? '';
         
         // CRÍTICO: Limpiar la contraseña de espacios en blanco al inicio y final
         $sip_password = trim($sip_password);
+        
+        // Determinar si estamos en red local (para configuración de ICE)
+        // Por defecto, si no hay servidores STUN configurados, asumimos que es LAN
+        $is_local_network = empty($webrtc_config['iceServers']) || 
+                           (is_array($webrtc_config['iceServers']) && count($webrtc_config['iceServers']) === 0);
         
         // DEBUG: Verificar la contraseña RAW antes de pasarla a JavaScript
         if (defined('ASTERISK_DEBUG_MODE') && ASTERISK_DEBUG_MODE) {
@@ -913,42 +930,18 @@
                 }
                 echo json_encode($iceServers, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
                 ?>,
+                is_local_network: <?php echo $is_local_network ? 'true' : 'false'; ?>,
                 debug_mode: <?php echo $webrtc_config['debug_mode'] ? 'true' : 'false'; ?>
             };
 
-            // DEBUG: Mostrar configuración en consola ANTES de inicializar
-            console.log('🔍 [DEBUG] Configuración del softphone (ANTES de validar):');
-            console.log('🔍 [DEBUG PHP] Valores RAW desde PHP:');
-            console.log('  - sip_domain RAW:', '<?php echo $webrtc_config['sip_domain']; ?>');
-            console.log('  - wss_server RAW:', '<?php echo $webrtc_config['wss_server']; ?>');
-            console.log('  - Extension:', webrtcConfig.extension || 'VACIA');
-            
-            // DEBUG CRÍTICO: Verificar contraseña en detalle
-            console.log('🔍 [DEBUG PASSWORD] ===== VERIFICACIÓN DE CONTRASEÑA =====');
-            console.log('  - Password recibida:', webrtcConfig.password ? 'DEFINIDA' : 'VACIA');
-            console.log('  - Longitud de password:', webrtcConfig.password ? webrtcConfig.password.length : 0);
-            console.log('  - Password esperada: Inicio2018 (10 caracteres)');
-            if (webrtcConfig.password) {
-                console.log('  - Password actual:', JSON.stringify(webrtcConfig.password));
-                console.log('  - Password en hex:', Array.from(webrtcConfig.password).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' '));
-                console.log('  - ¿Coincide con Inicio2018?:', webrtcConfig.password === 'Inicio2018' ? '✅ SÍ' : '❌ NO');
-                if (webrtcConfig.password !== 'Inicio2018') {
-                    console.warn('  ⚠️ DIFERENCIA DETECTADA:');
-                    const esperada = 'Inicio2018';
-                    for (let i = 0; i < Math.max(esperada.length, webrtcConfig.password.length); i++) {
-                        const charEsperado = esperada[i] || '[FIN]';
-                        const charActual = webrtcConfig.password[i] || '[FIN]';
-                        if (charEsperado !== charActual) {
-                            console.warn(`    * Posición ${i}: Esperado '${charEsperado}' (ASCII ${charEsperado.charCodeAt(0)}) vs Actual '${charActual}' (ASCII ${charActual.charCodeAt(0)})`);
-                        }
-                    }
-                }
+            // Logs de depuración solo con debug_mode (sin exponer contraseña en el navegador)
+            if (webrtcConfig.debug_mode) {
+                console.log('🔍 [DEBUG] Configuración del softphone:');
+                console.log('  - Extension:', webrtcConfig.extension || 'VACIA');
+                console.log('  - Password definida:', webrtcConfig.password ? 'sí' : 'no');
+                console.log('  - WSS Server:', webrtcConfig.wss_server || 'VACIO');
+                console.log('  - SIP Domain:', webrtcConfig.sip_domain || 'VACIO');
             }
-            console.log('🔍 [DEBUG PASSWORD] ======================================');
-            
-            console.log('  - WSS Server:', webrtcConfig.wss_server || 'VACIO');
-            console.log('  - SIP Domain:', webrtcConfig.sip_domain || 'VACIO');
-            console.log('  - Debug Mode:', webrtcConfig.debug_mode);
 
             // Verificar que los valores críticos no estén vacíos
             if (!webrtcConfig.extension || webrtcConfig.extension.trim() === '') {
@@ -964,41 +957,42 @@
                 console.error('❌ [ERROR CRÍTICO] El dominio SIP está vacío. Verifica config/asterisk.php');
             }
 
-            // Esperar a que TANTO SIP.js COMO softphone-web.js estén cargados
+            // Esperar a SIP.js y softphone-web.js (setTimeout recurrente: menos carga que setInterval cada 100ms)
             function inicializarSoftphoneConVerificacion() {
                 let intentos = 0;
                 const maxIntentos = 100;
+                const delayMs = 50;
 
-                const intervalo = setInterval(function () {
+                function siguienteIntento() {
                     intentos++;
 
-                    // Verificar que TODO esté listo
                     const sipjsListo = typeof SIP !== 'undefined' &&
                         typeof SIP.UserAgent !== 'undefined';
 
                     const softphoneListo = typeof WebRTCSoftphone !== 'undefined';
 
                     if (sipjsListo && softphoneListo) {
-                        clearInterval(intervalo);
-                        console.log('✅ Todos los componentes listos, inicializando softphone...');
+                        if (webrtcConfig.debug_mode) {
+                            console.log('✅ Todos los componentes listos, inicializando softphone...');
+                        }
 
                         try {
-                            // Verificar que el contenedor existe
                             const container = document.getElementById('webrtc-softphone');
                             if (!container) {
                                 console.warn('⚠️ [WebRTC Softphone] Contenedor del softphone no encontrado. El usuario puede no tener extensión asignada.');
                                 return;
                             }
 
-                            // Verificar configuración antes de inicializar
-                            console.log('🔄 [WebRTC Softphone] Inicializando softphone...');
-                            console.log('📝 [WebRTC Softphone] Verificando configuración:', {
-                                extension: webrtcConfig.extension || 'VACIA',
-                                password: webrtcConfig.password ? 'DEFINIDA' : 'VACIA',
-                                wss_server: webrtcConfig.wss_server,
-                                sip_domain: webrtcConfig.sip_domain,
-                                debug_mode: webrtcConfig.debug_mode
-                            });
+                            if (webrtcConfig.debug_mode) {
+                                console.log('🔄 [WebRTC Softphone] Inicializando softphone...');
+                                console.log('📝 [WebRTC Softphone] Config (sin credenciales):', {
+                                    extension: webrtcConfig.extension || 'VACIA',
+                                    password_configurada: !!webrtcConfig.password,
+                                    wss_server: webrtcConfig.wss_server,
+                                    sip_domain: webrtcConfig.sip_domain,
+                                    debug_mode: webrtcConfig.debug_mode
+                                });
+                            }
 
                             // Validar que la extensión y password no estén vacías
                             if (!webrtcConfig.extension || webrtcConfig.extension.trim() === '') {
@@ -1014,16 +1008,19 @@
                             }
 
                             window.webrtcSoftphone = new WebRTCSoftphone(webrtcConfig);
-                            console.log('✅ [WebRTC Softphone] Softphone WebRTC inicializado correctamente');
-                            console.log('📞 [WebRTC Softphone] Extensión:', webrtcConfig.extension);
+                            if (webrtcConfig.debug_mode) {
+                                console.log('✅ [WebRTC Softphone] Inicializado');
+                                console.log('📞 [WebRTC Softphone] Extensión:', webrtcConfig.extension);
+                                console.log('💡 Tip: verificarEstadoSoftphone() en consola');
+                            }
 
-                            // Función para verificar estado (útil para debugging)
                             window.verificarEstadoSoftphone = function () {
                                 if (window.webrtcSoftphone) {
-                                    console.log('📊 [WebRTC Softphone] Estado actual:', {
-                                        extension: window.webrtcSoftphone.config.extension,
-                                        sip_domain: window.webrtcSoftphone.config.sip_domain,
-                                        wss_server: window.webrtcSoftphone.config.wss_server,
+                                    const c = window.webrtcSoftphone.config || {};
+                                    console.log('📊 [WebRTC Softphone] Estado:', {
+                                        extension: c.extension,
+                                        sip_domain: c.sip_domain,
+                                        wss_server: c.wss_server,
                                         isRegistered: window.webrtcSoftphone.isRegistered,
                                         isConnected: window.webrtcSoftphone.isConnected,
                                         status: window.webrtcSoftphone.status,
@@ -1035,8 +1032,6 @@
                                 }
                             };
 
-                            console.log('💡 [WebRTC Softphone] Tip: Ejecuta verificarEstadoSoftphone() en la consola para ver el estado actual');
-
                         } catch (error) {
                             console.error('❌ [WebRTC Softphone] Error al inicializar softphone:', error);
                             console.error('❌ [WebRTC Softphone] Stack:', error.stack);
@@ -1046,21 +1041,24 @@
                         }
 
                     } else {
-                        if (intentos % 10 === 0) {
+                        if (webrtcConfig.debug_mode && intentos % 10 === 0) {
                             console.log(`⏳ Esperando componentes... (${intentos}/${maxIntentos})`);
                             console.log('  SIP.js listo:', sipjsListo);
                             console.log('  WebRTCSoftphone listo:', softphoneListo);
                         }
 
                         if (intentos >= maxIntentos) {
-                            clearInterval(intervalo);
                             console.error('❌ Timeout esperando componentes del softphone');
                             if (webrtcConfig.debug_mode) {
                                 alert('El softphone no se pudo inicializar. Por favor, recarga la página.');
                             }
+                        } else {
+                            setTimeout(siguienteIntento, delayMs);
                         }
                     }
-                }, 100);
+                }
+
+                siguienteIntento();
             }
 
             // Iniciar cuando el DOM esté listo

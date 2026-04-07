@@ -12,7 +12,7 @@ $action = $action ?? $_GET['action'] ?? 'login';
 ?>
 
 <div class="sidebar">
-    <div class="sidebar-logo"><?php echo APP_NAME; ?></div>
+    <img src="img/logo_apexpng.png" alt="Logo APEX" class="sidebar-logo-img">
     <nav class="sidebar-nav">
         <ul>
             <?php if ($rol_usuario === 'administrador'): ?>
@@ -29,7 +29,8 @@ $action = $action ?? $_GET['action'] ?? 'login';
                     onclick="window.location.href='index.php?action=admin_asignaciones'">
                     <i class="fas fa-user-friends"></i> Asignaciones
                 </li>
-                <li onclick="window.location.href='index.php?action=admin_reportes'">
+                <li class="<?php echo ($action === 'admin_reportes') ? 'active' : ''; ?>"
+                    onclick="window.location.href='index.php?action=admin_reportes'">
                     <i class="fas fa-chart-bar"></i> Reportes
                 </li>
                 <li onclick="window.location.href='index.php?action=admin_configuracion'">

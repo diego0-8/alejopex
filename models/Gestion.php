@@ -9,28 +9,28 @@ class Gestion {
     public static function crear($data) {
         try {
             $conn = getDBConnection();
-            
-            $sql = "INSERT INTO gestiones (
-                asesor_cedula,
-                cliente_id,
-                canal_contacto,
-                contrato_id,
-                nivel1_tipo,
-                nivel2_clasificacion,
-                nivel3_detalle,
-                observaciones,
-                llamada_telefonica,
-                whatsapp,
-                correo_electronico,
-                sms,
-                correo_fisico,
-                mensajeria_aplicacion,
-                duracion_segundos,
-                fecha_pago,
-                valor_pago
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            
-            $stmt = $conn->prepare($sql);
+
+            $columns = [
+                'asesor_cedula',
+                'cliente_id',
+                'canal_contacto',
+                'contrato_id',
+                'nivel1_tipo',
+                'nivel2_clasificacion',
+                'nivel3_detalle',
+                'observaciones',
+                'telefono_contacto',
+                'llamada_telefonica',
+                'whatsapp',
+                'correo_electronico',
+                'sms',
+                'correo_fisico',
+                'mensajeria_aplicacion',
+                'duracion_segundos',
+                'fecha_pago',
+                'valor_pago'
+            ];
+
             $params = [
                 $data['asesor_cedula'],
                 $data['cliente_id'],
@@ -40,6 +40,7 @@ class Gestion {
                 (!empty($data['nivel2_clasificacion']) && trim($data['nivel2_clasificacion']) !== '') ? trim($data['nivel2_clasificacion']) : null,
                 (!empty($data['nivel3_detalle']) && trim($data['nivel3_detalle']) !== '') ? trim($data['nivel3_detalle']) : null,
                 $data['observaciones'] ?? null,
+                $data['telefono_contacto'] ?? null,
                 $data['llamada_telefonica'] ?? 'no',
                 $data['whatsapp'] ?? 'no',
                 $data['correo_electronico'] ?? 'no',
@@ -50,6 +51,15 @@ class Gestion {
                 $data['fecha_pago'] ?? null,
                 $data['valor_pago'] ?? null
             ];
+
+            if (!empty($data['fecha_creacion'])) {
+                $columns[] = 'fecha_creacion';
+                $params[] = $data['fecha_creacion'];
+            }
+
+            $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+            $sql = "INSERT INTO gestiones (" . implode(', ', $columns) . ") VALUES ({$placeholders})";
+            $stmt = $conn->prepare($sql);
             
             $result = $stmt->execute($params);
             
@@ -107,7 +117,7 @@ class Gestion {
             // Optimizado: usa idx_gestiones_cliente y limita resultados
             $sql = "SELECT g.*, u.nombre_completo as asesor_nombre 
                     FROM gestiones g
-                    INNER JOIN usuarios u ON CAST(g.asesor_cedula AS CHAR) = CAST(u.cedula AS CHAR)
+                    LEFT JOIN usuarios u ON CAST(g.asesor_cedula AS CHAR) = CAST(u.cedula AS CHAR)
                     WHERE g.cliente_id = ?
                     ORDER BY g.fecha_creacion DESC
                     LIMIT 100";
@@ -117,6 +127,45 @@ class Gestion {
             
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
             
+        } catch (Exception $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Obtener historial de gestiones por cédula (CC) del cliente.
+     * Útil cuando un mismo cliente existe en múltiples bases (múltiples registros en `clientes`).
+     */
+    public static function obtenerHistorialPorCC($cc) {
+        try {
+            $conn = getDBConnection();
+
+            $cc = trim((string)$cc);
+            if ($cc === '') {
+                return [];
+            }
+
+            // Traer gestiones de todos los registros de clientes que compartan la misma cc,
+            // sin importar el estado de la base o del cliente.
+            $sql = "SELECT
+                        g.*,
+                        COALESCE(u.nombre_completo, CONCAT('Asesor ', g.asesor_cedula)) as asesor_nombre,
+                        c.cc as cliente_cc,
+                        c.nombre as cliente_nombre,
+                        c.base_id as cliente_base_id,
+                        bc.nombre as base_nombre
+                    FROM clientes c
+                    INNER JOIN gestiones g ON g.cliente_id = c.id
+                    LEFT JOIN bases_clientes bc ON bc.id = c.base_id
+                    LEFT JOIN usuarios u ON CAST(g.asesor_cedula AS CHAR) = CAST(u.cedula AS CHAR)
+                    WHERE c.cc = ?
+                    ORDER BY g.fecha_creacion DESC
+                    LIMIT 200";
+
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([$cc]);
+
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (Exception $e) {
             return [];
         }

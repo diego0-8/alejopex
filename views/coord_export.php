@@ -1,4 +1,4 @@
-<?php require_once 'config.php'; ?>
+<?php require_once __DIR__ . '/../config.php'; ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/common.css">
     <link rel="stylesheet" href="assets/css/admin-dashboard.css">
     <link rel="stylesheet" href="assets/css/coordinador-dashboard.css">
 </head>
@@ -17,13 +18,13 @@
     <?php 
     // Incluir navbar compartido
     $action = 'coordinador_exporte';
-    include 'views/Navbar.php'; 
+    include __DIR__ . '/Navbar.php'; 
     ?>
 
     <div class="main-container">
         <?php 
         // Incluir header compartido
-        include 'views/Header.php'; 
+        include __DIR__ . '/Header.php'; 
         ?>
 
         <!-- Sección Principal de Exporte -->
@@ -83,6 +84,7 @@
                                         <li>Información del asesor y cliente gestionado</li>
                                         <li>Árbol de tipificación completo (Nivel 1, 2 y 3) - 4 canales: LLAMADA SALIENTE, WHATSAPP, EMAIL, RECIBIR LLAMADA</li>
                                         <li>Obligación gestionada (o "Ninguna" si no se seleccionó)</li>
+                                        <li>Teléfono de contacto (tomado de <code>gestiones.telefono_contacto</code>)</li>
                                         <li>Fecha y valor de pago (cuando aplica: ACUERDO DE PAGO)</li>
                                         <li>Canales de comunicación autorizados</li>
                                         <li>Duración de la gestión en formato H:MM:SS</li>

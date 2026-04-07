@@ -216,7 +216,7 @@ class Usuario {
      * @return array
      */
     public function obtenerTodos() {
-        $query = "SELECT cedula, nombre_completo, usuario, estado, rol, fecha_creacion, fecha_actualizacion 
+        $query = "SELECT cedula, nombre_completo, usuario, estado, rol, fecha_creacion, fecha_actualizacion, extension 
                   FROM " . $this->table_name . " 
                   ORDER BY fecha_creacion DESC";
 
