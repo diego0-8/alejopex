@@ -17,7 +17,8 @@ class AuthController {
      * Procesar el login del usuario
      */
     public function login() {
-        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+        $requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+        if ($requestMethod == 'POST') {
             $usuario = trim($_POST['usuario'] ?? '');
             $contrasena = $_POST['contrasena'] ?? '';
 

@@ -315,11 +315,7 @@ class CoordinadorController {
             // Iniciar transacción para mejor rendimiento
             $conn->beginTransaction();
             
-            // Preparar statements para mejor rendimiento
-            $stmt_comercio_exists = $conn->prepare("SELECT id FROM clientes WHERE cc = ? LIMIT 1");
-            $stmt_factura_exists = $conn->prepare("SELECT id FROM obligaciones WHERE numero_obligacion = ? LIMIT 1");
-            $stmt_insert_comercio = $conn->prepare("INSERT INTO clientes (cc, nombre, cel1, cel2, cel3, cel4, cel5, cel6, estado, base_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt_insert_factura = $conn->prepare("INSERT INTO obligaciones (numero_obligacion, cliente_id, producto, saldo_capital, saldo_total, dias_mora, estado, base_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            // Los statements se preparan dentro de procesarLote para manejar base_id correctamente
             
             // Procesar CSV línea por línea en lotes
             $handle = fopen($file_path, 'r');
@@ -457,8 +453,7 @@ class CoordinadorController {
                 
                 // Procesar cuando el lote esté lleno
                 if (count($batch) >= $batch_size) {
-                    $this->procesarLote($batch, $base_id, $conn, $stmt_comercio_exists, $stmt_factura_exists, 
-                                       $stmt_insert_comercio, $stmt_insert_factura, 
+                    $this->procesarLote($batch, $base_id, $tipo_carga, $conn,
                                        $comercios_procesados, $comercios_cache, $facturas_cache, $resultado);
                     $batch = [];
                     
@@ -473,8 +468,7 @@ class CoordinadorController {
             
             // Procesar lote restante
             if (!empty($batch)) {
-                $this->procesarLote($batch, $base_id, $conn, $stmt_comercio_exists, $stmt_factura_exists, 
-                                   $stmt_insert_comercio, $stmt_insert_factura, 
+                $this->procesarLote($batch, $base_id, $tipo_carga, $conn,
                                    $comercios_procesados, $comercios_cache, $facturas_cache, $resultado);
             }
             
@@ -518,17 +512,15 @@ class CoordinadorController {
                 $stmt->execute([$base_id]);
                 $valor_total = $stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
                 
-                // Actualizar base
-                $query = "UPDATE bases_clientes SET 
-                         total_comercios = ?, 
-                         total_facturas = ?, 
-                         valor_total = ?,
-                         fecha_actualizacion = NOW()
-                         WHERE id = ?";
-                $stmt = $conn->prepare($query);
-                $stmt->execute([$total_comercios, $total_facturas, $valor_total, $base_id]);
-                
-                error_log("CoordinadorController: Estadísticas de base actualizadas - ID: {$base_id}, Comercios: {$total_comercios}, Facturas: {$total_facturas}");
+                // Actualizar base (solo fecha_actualizacion si las columnas de estadísticas no existen)
+                try {
+                    $query = "UPDATE bases_clientes SET fecha_actualizacion = NOW() WHERE id = ?";
+                    $stmt = $conn->prepare($query);
+                    $stmt->execute([$base_id]);
+                    error_log("CoordinadorController: Base actualizada - ID: {$base_id}, Comercios: {$total_comercios}, Facturas: {$total_facturas}");
+                } catch (Exception $e) {
+                    error_log("CoordinadorController: Error al actualizar base - " . $e->getMessage());
+                }
             }
 
             // Registrar actividad en historial
@@ -545,6 +537,8 @@ class CoordinadorController {
                 
                 if ($tipo_carga === 'nueva' && $base_id) {
                     $resultado['mensaje'] = "Base nueva creada exitosamente. Clientes únicos: {$resultado['clientes_unicos']}, Obligaciones: {$resultado['obligaciones_unicas']}";
+                } elseif ($tipo_carga === 'existente') {
+                    $resultado['mensaje'] = "Carga existente completada. Se actualizaron datos (excepto cédula y número de obligación). Clientes: {$resultado['clientes_unicos']}, Obligaciones: {$resultado['obligaciones_unicas']}";
                 } else {
                     $resultado['mensaje'] = "Procesamiento completado. Clientes únicos: {$resultado['clientes_unicos']}, Obligaciones: {$resultado['obligaciones_unicas']}";
                 }
@@ -581,91 +575,125 @@ class CoordinadorController {
      * Procesar un lote de datos del CSV (batch processing)
      * @param array $batch Lote de datos a procesar
      * @param int|null $base_id ID de la base (si aplica)
+     * @param string $tipo_carga 'nueva' = solo INSERT; 'existente' = UPDATE si existe (excepto cc y numero_obligacion), INSERT si no
      * @param PDO $conn Conexión a la base de datos
-     * @param PDOStatement $stmt_comercio_exists Statement para verificar comercio
-     * @param PDOStatement $stmt_factura_exists Statement para verificar factura
-     * @param PDOStatement $stmt_insert_comercio Statement para insertar comercio
-     * @param PDOStatement $stmt_insert_factura Statement para insertar factura
-     * @param array $comercios_procesados Referencia a array de comercios procesados en este lote
-     * @param array $comercios_cache Referencia a cache de comercios existentes
-     * @param array $facturas_cache Referencia a cache de facturas existentes
-     * @param array $resultado Referencia al resultado del procesamiento
+     * @param array $comercios_procesados Referencia
+     * @param array $comercios_cache Referencia
+     * @param array $facturas_cache Referencia
+     * @param array $resultado Referencia
      */
-    private function procesarLote($batch, $base_id, $conn, $stmt_comercio_exists, $stmt_factura_exists, 
-                                 $stmt_insert_comercio, $stmt_insert_factura, 
+    private function procesarLote($batch, $base_id, $tipo_carga, $conn,
                                  &$comercios_procesados, &$comercios_cache, &$facturas_cache, &$resultado) {
+        
+        $es_carga_existente = ($tipo_carga === 'existente');
+        
+        if ($base_id) {
+            $stmt_comercio_exists = $conn->prepare("SELECT id FROM clientes WHERE cc = ? AND base_id = ? LIMIT 1");
+            // Carga existente: buscar obligación por numero_obligacion + cliente_id (mismo cliente en la base), no por base_id (puede ser NULL en datos antiguos)
+            if ($es_carga_existente) {
+                $stmt_factura_exists = $conn->prepare("SELECT id FROM obligaciones WHERE numero_obligacion = ? AND cliente_id = ? LIMIT 1");
+            } else {
+                $stmt_factura_exists = $conn->prepare("SELECT id FROM obligaciones WHERE numero_obligacion = ? AND base_id = ? LIMIT 1");
+            }
+        } else {
+            $stmt_comercio_exists = $conn->prepare("SELECT id FROM clientes WHERE cc = ? LIMIT 1");
+            $stmt_factura_exists = $conn->prepare("SELECT id FROM obligaciones WHERE numero_obligacion = ? LIMIT 1");
+        }
+        $stmt_insert_comercio = $conn->prepare("INSERT INTO clientes (cc, nombre, cel1, cel2, cel3, cel4, cel5, cel6, estado, base_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt_insert_factura = $conn->prepare("INSERT INTO obligaciones (numero_obligacion, cliente_id, producto, saldo_capital, saldo_total, dias_mora, estado, base_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        
+        if ($es_carga_existente) {
+            $stmt_update_comercio = $conn->prepare("UPDATE clientes SET nombre = ?, cel1 = ?, cel2 = ?, cel3 = ?, cel4 = ?, cel5 = ?, cel6 = ?, estado = ? WHERE id = ?");
+            $stmt_update_factura = $conn->prepare("UPDATE obligaciones SET producto = ?, saldo_capital = ?, saldo_total = ?, dias_mora = ?, estado = ? WHERE id = ?");
+        } else {
+            $stmt_update_comercio = null;
+            $stmt_update_factura = null;
+        }
         
         foreach ($batch as $fila) {
             try {
                 $cc = trim($fila['cc']);
                 $nombre = trim($fila['nombre']);
-                $cel1 = trim($fila['cel1']);
-                $cel2 = trim($fila['cel2']);
-                $cel3 = trim($fila['cel3']);
-                $cel4 = trim($fila['cel4']);
-                $cel5 = trim($fila['cel5']);
-                $cel6 = trim($fila['cel6']);
+                $cel1 = trim($fila['cel1'] ?? '');
+                $cel2 = trim($fila['cel2'] ?? '');
+                $cel3 = trim($fila['cel3'] ?? '');
+                $cel4 = trim($fila['cel4'] ?? '');
+                $cel5 = trim($fila['cel5'] ?? '');
+                $cel6 = trim($fila['cel6'] ?? '');
                 
-                // Verificar cliente en cache primero
                 $cliente_id = null;
+                $cache_key = $base_id ? ($base_id . '_' . $cc) : $cc;
                 
-                if (isset($comercios_cache[$cc])) {
-                    $cliente_id = $comercios_cache[$cc];
+                if (isset($comercios_cache[$cache_key])) {
+                    $cliente_id = $comercios_cache[$cache_key];
                 } else {
-                    // Verificar en base de datos
-                    $stmt_comercio_exists->execute([$cc]);
+                    if ($base_id) {
+                        $stmt_comercio_exists->execute([$cc, $base_id]);
+                    } else {
+                        $stmt_comercio_exists->execute([$cc]);
+                    }
                     $cliente_existente = $stmt_comercio_exists->fetch(PDO::FETCH_ASSOC);
                     
                     if ($cliente_existente) {
                         $cliente_id = $cliente_existente['id'];
-                        $comercios_cache[$cc] = $cliente_id;
+                        $comercios_cache[$cache_key] = $cliente_id;
+                        if ($es_carga_existente) {
+                            $stmt_update_comercio->execute([$nombre, $cel1, $cel2, $cel3, $cel4, $cel5, $cel6, 'activo', $cliente_id]);
+                        }
                     } else {
-                        // Crear nuevo cliente
                         $stmt_insert_comercio->execute([$cc, $nombre, $cel1, $cel2, $cel3, $cel4, $cel5, $cel6, 'activo', $base_id]);
                         $cliente_id = $conn->lastInsertId();
-                        $comercios_cache[$cc] = $cliente_id;
+                        $comercios_cache[$cache_key] = $cliente_id;
                         $resultado['comercios_creados']++;
                     }
                 }
                 
-                // Contar clientes únicos procesados (todos, nuevos y existentes)
-                if (!isset($comercios_procesados[$cc])) {
+                if (!isset($comercios_procesados[$cache_key])) {
                     $resultado['comercios_unicos']++;
-                    $comercios_procesados[$cc] = $cliente_id;
+                    $comercios_procesados[$cache_key] = $cliente_id;
                 }
                 
-                // Procesar obligacion
                 $numero_obligacion = trim($fila['numero_obligacion']);
                 if (empty($numero_obligacion)) {
-                    continue; // Saltar si no hay número de obligación
+                    continue;
                 }
                 
-                // Verificar obligacion en cache
-                if (!isset($facturas_cache[$numero_obligacion])) {
-                    $stmt_factura_exists->execute([$numero_obligacion]);
+                $factura_cache_key = $base_id ? ($base_id . '_' . $numero_obligacion) : $numero_obligacion;
+                if (!isset($facturas_cache[$factura_cache_key])) {
+                    if ($base_id) {
+                        if ($es_carga_existente) {
+                            $stmt_factura_exists->execute([$numero_obligacion, $cliente_id]);
+                        } else {
+                            $stmt_factura_exists->execute([$numero_obligacion, $base_id]);
+                        }
+                    } else {
+                        $stmt_factura_exists->execute([$numero_obligacion]);
+                    }
                     $obligacion_existente = $stmt_factura_exists->fetch(PDO::FETCH_ASSOC);
                     
-                    if (!$obligacion_existente) {
-                        // Crear nueva obligación
-                        $producto = trim($fila['producto']);
-                        $saldo_capital = (float)$fila['saldo_capital'];
-                        $saldo_total = (float)$fila['saldo_total'];
-                        $dias_mora = (int)$fila['dias_mora'];
-                        $estado = $dias_mora <= 0 ? 'vigente' : 'vencida';
-                        
+                    $producto = trim($fila['producto'] ?? '');
+                    $saldo_capital = (float)($fila['saldo_capital'] ?? 0);
+                    $saldo_total = (float)($fila['saldo_total'] ?? 0);
+                    $dias_mora = (int)($fila['dias_mora'] ?? 0);
+                    $estado = $dias_mora <= 0 ? 'vigente' : 'vencida';
+                    
+                    if ($obligacion_existente) {
+                        if ($es_carga_existente) {
+                            $stmt_update_factura->execute([$producto, $saldo_capital, $saldo_total, $dias_mora, $estado, $obligacion_existente['id']]);
+                        }
+                    } else {
                         $stmt_insert_factura->execute([
                             $numero_obligacion, $cliente_id, $producto, $saldo_capital, $saldo_total, $dias_mora, $estado, $base_id
                         ]);
                         $resultado['facturas_creadas']++;
                     }
-                    // Contar obligación única (tanto nuevas como existentes)
                     $resultado['facturas_unicas']++;
-                    $facturas_cache[$numero_obligacion] = true;
+                    $facturas_cache[$factura_cache_key] = true;
                 }
                 
             } catch (Exception $e) {
                 $resultado['errores'][] = "Error procesando fila: " . $e->getMessage();
-                if (count($resultado['errores']) <= 100) { // Limitar errores en log
+                if (count($resultado['errores']) <= 100) {
                     error_log("CoordinadorController: Error en fila - " . $e->getMessage());
                 }
             }
@@ -1453,6 +1481,46 @@ class CoordinadorController {
     }
 
     /**
+     * Obtener detalle de un cliente con sus obligaciones (para modal del coordinador)
+     * @param int $cliente_id
+     * @return array { success, cliente, obligaciones }
+     */
+    public function obtenerDetalleClienteConObligaciones($cliente_id) {
+        try {
+            $conn = getDBConnection();
+            $cliente_id = (int) $cliente_id;
+            if ($cliente_id <= 0) {
+                return ['success' => false, 'message' => 'ID de cliente inválido', 'cliente' => null, 'obligaciones' => []];
+            }
+            // Cliente: SELECT * para traer todas las columnas (cc, nombre, cel1..cel6, email, barrio, etc. si existen)
+            $stmt = $conn->prepare("SELECT * FROM clientes WHERE id = ?");
+            $stmt->execute([$cliente_id]);
+            $cliente = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$cliente) {
+                return ['success' => false, 'message' => 'Cliente no encontrado', 'cliente' => null, 'obligaciones' => []];
+            }
+            // Obligaciones del cliente
+            $stmtObl = $conn->prepare("SELECT numero_obligacion, producto, saldo_capital, saldo_total, dias_mora, estado 
+                FROM obligaciones WHERE cliente_id = ? ORDER BY dias_mora DESC, id ASC");
+            $stmtObl->execute([$cliente_id]);
+            $obligaciones = $stmtObl->fetchAll(PDO::FETCH_ASSOC);
+            return [
+                'success' => true,
+                'cliente' => $cliente,
+                'obligaciones' => $obligaciones
+            ];
+        } catch (Exception $e) {
+            error_log("Error al obtener detalle cliente: " . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'cliente' => null,
+                'obligaciones' => []
+            ];
+        }
+    }
+
+    /**
      * Guardar acceso de asesores a una base
      * @param array $datos_acceso
      * @return array
@@ -1665,7 +1733,89 @@ class CoordinadorController {
     }
 
     /**
-     * Eliminar una base de datos
+     * Deshabilitar una base de clientes (solo cambia estado; datos e historial se conservan)
+     * Los asesores dejan de verla y no se puede asignar; el reporte de gestiones y el historial siguen incluyéndola.
+     * @param int $base_id
+     * @return array
+     */
+    public function deshabilitarBase($base_id) {
+        try {
+            $conn = getDBConnection();
+            $base_id = (int) $base_id;
+            $query = "SELECT id, nombre FROM bases_clientes WHERE id = ?";
+            $stmt = $conn->prepare($query);
+            $stmt->execute([$base_id]);
+            $base = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$base) {
+                return ['success' => false, 'message' => 'Base no encontrada'];
+            }
+            $query = "UPDATE bases_clientes SET estado = 'inactivo', fecha_actualizacion = NOW() WHERE id = ?";
+            $stmt = $conn->prepare($query);
+            $stmt->execute([$base_id]);
+            return [
+                'success' => true,
+                'message' => 'Base deshabilitada. Seguirá visible en historial y reportes.'
+            ];
+        } catch (Exception $e) {
+            error_log("Error al deshabilitar base: " . $e->getMessage());
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Habilitar una base de clientes (vuelve a estado activo)
+     * @param int $base_id
+     * @return array
+     */
+    public function habilitarBase($base_id) {
+        try {
+            $conn = getDBConnection();
+            $base_id = (int) $base_id;
+            $query = "SELECT id, nombre FROM bases_clientes WHERE id = ?";
+            $stmt = $conn->prepare($query);
+            $stmt->execute([$base_id]);
+            $base = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$base) {
+                return ['success' => false, 'message' => 'Base no encontrada'];
+            }
+            $query = "UPDATE bases_clientes SET estado = 'activo', fecha_actualizacion = NOW() WHERE id = ?";
+            $stmt = $conn->prepare($query);
+            $stmt->execute([$base_id]);
+            return [
+                'success' => true,
+                'message' => 'Base habilitada correctamente'
+            ];
+        } catch (Exception $e) {
+            error_log("Error al habilitar base: " . $e->getMessage());
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Obtener bases deshabilitadas (estado inactivo) para la pestaña Habilitar
+     * @return array
+     */
+    public function obtenerBasesDeshabilitadas() {
+        try {
+            $conn = getDBConnection();
+            $query = "SELECT b.id, b.nombre, b.fecha_creacion, b.fecha_actualizacion,
+                         COUNT(DISTINCT c.id) as total_clientes, b.estado
+                      FROM bases_clientes b
+                      LEFT JOIN clientes c ON b.id = c.base_id
+                      WHERE b.estado = 'inactivo'
+                      GROUP BY b.id, b.nombre, b.fecha_creacion, b.fecha_actualizacion, b.estado
+                      ORDER BY b.fecha_actualizacion DESC";
+            $stmt = $conn->prepare($query);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            error_log("Error al obtener bases deshabilitadas: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Eliminar una base de datos (borrado físico; solo si se requiere en el futuro)
      * @param int $base_id
      * @return array
      */

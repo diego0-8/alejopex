@@ -204,7 +204,7 @@ class BaseDatosController {
             $base_nombre = $base['nombre'];
             
             // Eliminar asignaciones de asesores a esta base
-            $query_asignaciones = "DELETE FROM asignaciones_base_comercios WHERE base_id = ?";
+            $query_asignaciones = "DELETE FROM asignaciones_base_clientes WHERE base_id = ?";
             $stmt_asignaciones = $conn->prepare($query_asignaciones);
             $stmt_asignaciones->execute([$base_id]);
             
